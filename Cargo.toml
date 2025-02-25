@@ -4,6 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+log = "0.4.24"
+env_logger = "0.11.6"
 thiserror = "2.0.11"
+
+rand = "0.9.0"
+
 clap = "4.5.31"
 image = "0.25.5"
+palette = "0.7.6"
+
+[features]
+default = []
+logging = [] # Enable this feature to see the logs
