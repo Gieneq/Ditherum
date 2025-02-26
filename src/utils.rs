@@ -2,7 +2,8 @@ pub mod algorithms {
     use std::fmt::Debug;
     use rand::seq::IndexedRandom;
     
-    const CONVERGE_THRESHOLD: f32 = 0.01;
+    const CONVERGE_THRESHOLD: f32 = 0.05;
+    const CONVERGE_ENOUGH_THRESHOLD: f32 = 0.5;
     const ITERATION_MAX_COUNT: usize = 40;
 
     /// Errors that can occur while finding centroids using the K-means algorithm.
@@ -149,9 +150,15 @@ pub mod algorithms {
         T: Debug + Copy + Clone,
         D: Fn(&T, &T) -> f32,
     {
-        last_centroids.iter()
+        let distances = last_centroids.iter()
             .zip(recent_centroids.iter())
-            .all(|(last, recent)| distance_measure(last, recent) < distance_threshold)
+            .map(|(last, recent)| distance_measure(last, recent))
+            .collect::<Vec<_>>();
+
+        log::info!("distances={distances:?}");
+
+        distances.iter()
+            .all(|&distance| distance < distance_threshold)
     }
 
     /// Computes new centroids by calculating the mean of each cluster.
@@ -201,7 +208,7 @@ pub mod algorithms {
     /// The following example demonstrates how to use `find_centroids` with floating-point data:
     ///
     /// ```
-    /// use ditherum::algorithms::{find_centroids, CentroidsFindError};
+    /// use ditherum::utils::algorithms::{find_centroids, CentroidsFindError};
     ///
     ///  // Define input data.
     ///  let input_data: Vec<f32> = vec![1.0, 2.0, 9.0, 7.0, 8.0, 22.0, 24.0, 3.0];
@@ -255,14 +262,11 @@ pub mod algorithms {
 
         loop {
             iterations_count += 1;
-
-            if iterations_count > ITERATION_MAX_COUNT {
-                return Err(CentroidsFindError::TooManyIterations);
-            }
+            log::debug!("Iteration {iterations_count}.");
 
             // Assign each input point to the nearest centroid.
             clusters = create_clusters_assignment(input, &centroids, &distance_measure);
-            log::debug!("Clusters: {clusters:?}");
+            log::trace!("Clusters: {clusters:?}");
 
             // Compute new centroids as the mean of the clusters.
             last_centroids = centroids;
@@ -277,6 +281,21 @@ pub mod algorithms {
             ) {
                 log::debug!("Found solution after {iterations_count} iterations!");
                 break;
+            }
+            
+            if iterations_count > ITERATION_MAX_COUNT {
+                // Iterations exhausted, but solution can be good enough
+                if check_converges(
+                    &last_centroids, 
+                    &centroids, 
+                    CONVERGE_ENOUGH_THRESHOLD,
+                    &distance_measure
+                ) {
+                    log::debug!("Found good enough solution after {iterations_count} iterations!");
+                    break;
+                } else {
+                    return Err(CentroidsFindError::TooManyIterations);
+                }
             }
         }
 

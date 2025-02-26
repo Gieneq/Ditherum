@@ -35,7 +35,7 @@ fn test_reducing_bn_w_palette() {
     let test_image = load_test_image(BNW_IMAGE_FILENAME);
     let palette = PaletteRGB::from_image(&test_image);
     assert_eq!(palette.len(), 2);
-    let reduced_palette = palette.reduce_to(1);
+    let reduced_palette = palette.try_reduce(1);
     assert!(reduced_palette.is_ok());
 }
 
@@ -45,8 +45,8 @@ fn test_reducing_color_palette() {
     let test_image = load_test_image(COLOR_IMAGE_FILENAME);
     let palette = PaletteRGB::from_image(&test_image);
     let original_len = palette.len();
-    let reduced_palette = palette.reduce_to(10);
-    assert!(reduced_palette.is_ok());
+    let reduced_palette = palette.try_reduce(10);
+    assert!(reduced_palette.is_ok(), "failed result={:?}", reduced_palette);
     let reduced_palette = reduced_palette.unwrap();
     log::debug!(
         "Reduced a palette of {} colors to {} colors: {:?}",

@@ -1,27 +1,40 @@
 use std::{collections::HashSet, ops::Deref, vec};
 use palette::{color_difference::Ciede2000, FromColor, Lab, Srgb};
-use rand::seq::IndexedRandom;
-
 use image::{Rgb, RgbImage};
+use super::utils::algorithms;
+
+pub mod errors {
+    use crate::utils::algorithms::CentroidsFindError;
+
+    #[derive(Debug, thiserror::Error)]
+    pub enum PaletteError {
+        #[error("Not enough colors to be converted to. Expected={expected} but actual={actual}.")]
+        NotEnoughColors {
+            expected: usize,
+            actual: usize
+        },
+
+        #[error("Faild to convert, reason={0}")]
+        ConvertionErrot(CentroidsFindError),
+    }
+
+    impl From<CentroidsFindError> for PaletteError {
+        fn from(value: CentroidsFindError) -> Self {
+            Self::ConvertionErrot(value)
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct PaletteRGB(Vec<Rgb<u8>>);
 
-#[derive(Debug, thiserror::Error)]
-pub enum PaletteError {
-
-    #[error("Not enough colors to be converted to. Expected={expected} but actual={actual}.")]
-    NotEnoughColors {
-        expected: usize,
-        actual: usize
-    }
-}
-
 impl PaletteRGB {
+    /// Constructs a palette from a `HashSet` of `Rgb<u8>` colors.
     pub fn from_hashset(input_set: HashSet<Rgb<u8>>) -> Self {
         PaletteRGB(input_set.into_iter().collect())
     }
     
+    /// Extracts a palette from an image by collecting unique pixel colors.
     pub fn from_image(img: &RgbImage) -> Self {
         let mut palette_set = HashSet::new();
 
@@ -35,95 +48,53 @@ impl PaletteRGB {
         Self::from_hashset(palette_set)
     }
 
-    pub fn black_n_white() -> Self {
+    /// Returns a palette containing only black and white.
+    pub fn black_and_white() -> Self {
         PaletteRGB(vec![
-            Rgb::<u8>([0, 0, 0]),
-            Rgb::<u8>([255, 255, 255])
+            Rgb([0, 0, 0]),
+            Rgb([255, 255, 255]),
         ])
     }
 
-    fn find_centroids(input: &[Lab], centroids_count: usize) -> Vec<Lab> {
-        const THRESHOLD_FACTOR: f32 = 0.01;
-        const THRESHOLD_MIN: usize = 2;
-        
-        // Apply K-mean clustering
-        let mut rng = rand::rng();
-        
-        // Centorids - centers of cluester. At first choosen randomly
-        let mut centroids = input.choose_multiple(&mut rng, centroids_count).cloned().collect::<Vec<_>>();
-        let mut clusters: Vec<Vec<Lab>> = vec![vec![]; centroids_count];
-        assert_eq!(centroids.len(), clusters.len());
-        
-        // Helper vectors to store values used in convergence check
-        let mut last_counts;
-        let mut recent_counts: Vec<usize> = vec![0; centroids_count];
-        let threshold = ((input.len() as f32 * THRESHOLD_FACTOR).round() as usize).max(THRESHOLD_MIN);
+    /// Returns a palette of primary colors: red, green, and blue.
+    pub fn primary() -> Self {
+        PaletteRGB(vec![
+            Rgb([255, 0, 0]),
+            Rgb([0, 255, 0]),
+            Rgb([0, 0, 255]),
+        ])
+    }
 
-        fn check_converges(last_counts: &[usize], recent_counts: &[usize], threshold: usize) -> bool {
-            last_counts.iter()
-                .zip(recent_counts.iter())
-                .all(|(last, recent)| last.abs_diff(*recent) < threshold)
-        }
+    /// Returns a grayscale palette with the specified number of steps.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ditherum::palette::PaletteRGB;
+    /// 
+    /// let palette = PaletteRGB::grayscale(5);
+    /// 
+    /// println!("{palette:?}");
+    /// // Produces: [black, dark gray, medium gray, light gray, white]
+    /// ```
+    pub fn grayscale(steps: usize) -> PaletteRGB {
+        assert!(steps >= 2, "Grayscale palette requires at least two steps.");
 
-        let mut iterations_count = 0;
-        loop {
-            iterations_count += 1;
+        let colors = (0..steps)
+            .map(|step| {
+                let channel_value = ((255 * step) / (steps - 1)) as u8;
+                Rgb([channel_value, channel_value, channel_value])
+            })
+            .collect::<Vec<_>>();
 
-            // Clear last clusters
-            clusters.iter_mut().for_each(|c| c.clear());
+        PaletteRGB(colors)
+    }
 
-            // Populate clusters based on distance from centroids
-            input.iter().for_each(|color| {
-                // Find closest controid and place value to coresponding cluster
-                let (selected_centroid_idx, _) = centroids.iter()
-                    .enumerate()
-                    .map(|(centroid_idx, centroid_color)| (centroid_idx, centroid_color.difference(*color)))
-                    .min_by(|(_, color_distance), (_, other_color_distance)| color_distance.partial_cmp(other_color_distance).unwrap() )
-                    .unwrap();
-                clusters[selected_centroid_idx].push(*color);
-
-            });
-
-            // For each cluster find new centroids
-            centroids = clusters.iter().map(|cluster| {
-                let items_count = cluster.len();
-                // For sure there is at least 1 element in each cluster
-
-                let accumulator = cluster.iter().fold([0f32; 3], {|acc, color|
-                    [
-                        acc[0] + color.l,
-                        acc[1] + color.a,
-                        acc[2] + color.b
-                    ]
-                });
-
-                // Mean LAB value
-                Lab::new(
-                    accumulator[0] / items_count as f32,
-                    accumulator[1] / items_count as f32,
-                    accumulator[2] / items_count as f32
-                )
-            }).collect::<Vec<_>>();
-
-            // Check convergence
-            last_counts = recent_counts;
-            recent_counts = clusters.iter().map(|cluster| cluster.len()).collect();
-            log::debug!("Iteration {}: centroids={:?}", iterations_count, centroids);
-
-            if check_converges(&last_counts, &recent_counts, threshold) {
-                log::debug!("Find K-mean clustering solution in {iterations_count} iterations!");
-                break;
-            }
-        }
-
-        centroids
-    } 
-
-    pub fn reduce_to(self, target_colors_count: usize) -> Result<Self, PaletteError> {
+    pub fn try_reduce(self, target_colors_count: usize) -> Result<Self, self::errors::PaletteError> {
         match self.len().cmp(&target_colors_count) {
 
             // Cannot obtain bigger pallete than the input pallet size
-            std::cmp::Ordering::Less => Err(PaletteError::NotEnoughColors { 
+            std::cmp::Ordering::Less => Err(self::errors::PaletteError::NotEnoughColors { 
                 expected: target_colors_count, 
                 actual: self.len() 
             }),
@@ -134,44 +105,141 @@ impl PaletteRGB {
             // Reduce colors count
             std::cmp::Ordering::Greater => {
 
-                // Glue code to stick image crate with palette crate
-                let srgb_colors = self.iter().map(|c| {
-                    Srgb::new(
-                        c[0] as f32 / 255.0,
-                        c[1] as f32 / 255.0,
-                        c[2] as f32 / 255.0
-                    )
-                }).collect::<Vec<_>>();
-
-                // Use LAB for better percetion based matching
-                let lab_colors = Vec::<Lab>::from_color(srgb_colors);
+                let lab_colors: Vec<Lab> = self.into();
 
                 // Apply clusterization to find best fitting centroids
-                let new_lab_colors = Self::find_centroids(&lab_colors, target_colors_count);
+                let new_lab_colors = find_lab_colors_centroids(
+                    &lab_colors, 
+                    target_colors_count
+                )?;
 
-                // Back to sRGB color space
-                let new_rgb_colors = Vec::<Srgb>::from_color(new_lab_colors);
-
-                // Glue code to stick palette crate with image crate
-                let result_rgb_colors = new_rgb_colors.into_iter().map(|c| {
-                    Rgb([
-                        (c.red * 255.0).round() as u8,
-                        (c.green * 255.0).round() as u8,
-                        (c.blue * 255.0).round() as u8
-                    ])
-                }).collect::<Vec<_>>();
-
-                Ok(PaletteRGB(result_rgb_colors))
+                Ok(new_lab_colors.into())
             },
         }
-
     }
 }
 
+impl From<PaletteRGB> for Vec<Lab> {
+    fn from(value: PaletteRGB) -> Self {
+        let srgb_colors = value.iter().map(|c| {
+            Srgb::new(
+                c[0] as f32 / 255.0,
+                c[1] as f32 / 255.0,
+                c[2] as f32 / 255.0
+            )
+        }).collect::<Vec<_>>();
+
+        Vec::<Lab>::from_color(srgb_colors)
+    }
+}
+
+/// Allows conversion from a vector of Lab colors into a `PaletteRGB`.
+impl From<Vec<Lab>> for PaletteRGB {
+    fn from(value: Vec<Lab>) -> Self {
+        let new_rgb_colors = Vec::<Srgb>::from_color(value);
+
+        let result_rgb_colors = new_rgb_colors.into_iter().map(|c| {
+            Rgb([
+                (c.red * 255.0).round() as u8,
+                (c.green * 255.0).round() as u8,
+                (c.blue * 255.0).round() as u8
+            ])
+        }).collect::<Vec<_>>();
+
+        PaletteRGB(result_rgb_colors)
+    }
+}
+
+/// Allows treating `PaletteRGB` as a slice of `Rgb<u8>`.
 impl Deref for PaletteRGB {
     type Target = Vec<Rgb<u8>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+/// Clusters Lab colors using k-means and returns the new Lab centroids.
+///
+/// # Parameters
+///
+/// - `input`: A slice of Lab colors.
+/// - `centroids_count`: The number of centroids to compute.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of new Lab centroids or an error if clustering fails.
+fn find_lab_colors_centroids(
+    input: &[Lab], 
+    centroids_count: usize
+) -> Result<Vec<Lab>, algorithms::CentroidsFindError> {
+    let lab_distance_measure = |a: &Lab, b: &Lab| {
+        a.difference(*b)
+    };
+
+    let calculate_lab_mean = |arr: &[Lab]| {
+        let mut accumulator = arr.iter()
+            .fold(Lab::new(0.0, 0.0, 0.0), |mut acc, item| {
+                acc.l += item.l;
+                acc.a += item.a;
+                acc.b += item.b;
+                acc
+            });
+        accumulator.l /= arr.len() as f32;
+        accumulator.a /= arr.len() as f32;
+        accumulator.b /= arr.len() as f32;
+        accumulator
+    };
+
+    algorithms::find_centroids(
+        input, 
+        centroids_count, 
+        lab_distance_measure, 
+        calculate_lab_mean
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_grayscale_palette() {
+        let steps = 113;
+        let palette = PaletteRGB::grayscale(steps);
+        assert_eq!(palette.len(), steps);
+
+        // Check endpoints are black and white.
+        assert_eq!(palette[0], Rgb([0, 0, 0]));
+        assert_eq!(palette[steps - 1], Rgb([255, 255, 255]));
+    }
+
+    #[test]
+    fn test_try_reduce_not_enough_colors() {
+        // Create a palette with only three colors.
+        let palette = PaletteRGB::primary();
+
+        // Trying to reduce to 4 colors should fail.
+        let result = palette.clone().try_reduce(4);
+        assert!(result.is_err());
+
+        if let Err(errors::PaletteError::NotEnoughColors { expected, actual }) = result {
+            assert_eq!(expected, 4);
+            assert_eq!(actual, palette.len());
+        } else {
+            panic!("Expected NotEnoughColors error.");
+        }
+    }
+
+    #[test]
+    fn test_reduce_bn_w_palette() {
+        let palette = PaletteRGB::black_and_white();
+        assert_eq!(palette.len(), 2);
+
+        let reduced_palette = palette.try_reduce(1);
+        assert!(reduced_palette.is_ok());
+        let reduced_palette = reduced_palette.unwrap();
+        let reduced_color = reduced_palette[0];
+        assert_eq!(reduced_color, Rgb::<u8>([119, 119, 119]));
     }
 }
