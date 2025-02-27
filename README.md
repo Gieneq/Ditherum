@@ -18,11 +18,13 @@ To use Ditherum as a library in your Rust project, add the following to your `Ca
 ditherum = { git = "https://github.com/your-username/ditherum" }
 ```
 
-To install the CLI version:
+To install the CLI tool:
 
 ```sh
 cargo install --path .
 ```
+
+It will install ditherum as ditherum executable.
 
 ## Usage
 
