@@ -1,11 +1,14 @@
-// tests/common.rs
-
+use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::{fmt::Debug, path::Path};
 
 pub const TEST_IMAGES_DIR: &str = "./res/test_images";
 pub const COLOR_IMAGE_FILENAME: &str = "karambola.PNG";
 pub const BNW_IMAGE_FILENAME: &str = "blackwhite.png";
+
+pub const TEST_PALETTES_DIR: &str = "./res/test_palettes";
+pub const PRIMARY_PALETTE_FILENAME: &str = "test_ok_palette.json";
+pub const CORRUPTED_PALETTE_FILENAME: &str = "test_corrupted_palette.json";
 
 pub const SAVE_TEST_IMAGE_DIR: &str = "./res/test_results";
 pub const SAVE_TEST_FILENAME: &str = "test_result.png";
@@ -62,4 +65,18 @@ where
 
     log::debug!("Image loaded: width={}, height={}", img.width(), img.height());
     img
+}
+
+pub fn get_palette_absolute_path<P>(filename: P) -> PathBuf 
+where 
+    P: AsRef<Path>
+{
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(TEST_PALETTES_DIR).join(filename)
+}
+
+pub fn get_test_save_absolute_path<P>(filename: P) -> PathBuf 
+where 
+    P: AsRef<Path>
+{
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(SAVE_TEST_IMAGE_DIR).join(filename)
 }

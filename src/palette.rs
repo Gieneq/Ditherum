@@ -1,6 +1,8 @@
-use std::{collections::HashSet, ops::Deref, vec};
+use std::{collections::HashSet, fs::File, io::{BufReader, BufWriter}, ops::Deref, path::Path, vec};
+use errors::PaletteError;
 use palette::{color_difference::Ciede2000, FromColor, Lab, Srgb};
 use image::{Rgb, RgbImage};
+use serde::{Serialize, Deserialize};
 use super::utils::algorithms;
 
 pub mod errors {
@@ -16,6 +18,12 @@ pub mod errors {
 
         #[error("Faild to convert, reason={0}")]
         ConvertionErrot(CentroidsFindError),
+
+        #[error("I/O error, reason={0}")]
+        IoError(std::io::Error),
+
+        #[error("JSON parsing failed, reason={0}")]
+        JsonParsingFailed(serde_json::error::Error),
     }
 
     impl From<CentroidsFindError> for PaletteError {
@@ -23,15 +31,58 @@ pub mod errors {
             Self::ConvertionErrot(value)
         }
     }
+
+    impl From<std::io::Error> for PaletteError {
+        fn from(value: std::io::Error) -> Self {
+            Self::IoError(value)
+        }
+    }
+
+    impl From<serde_json::error::Error> for PaletteError {
+        fn from(value: serde_json::error::Error) -> Self {
+            Self::JsonParsingFailed(value)
+        }
+    }
 }
 
-#[derive(Debug, Clone)]
-pub struct PaletteRGB(Vec<Rgb<u8>>);
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ColorRGB([u8; 3]);
+
+impl ColorRGB {
+    pub fn red(&self) -> u8 {
+        self[0]
+    }
+    
+    pub fn green(&self) -> u8 {
+        self[1]
+    }
+    
+    pub fn blue(&self) -> u8 {
+        self[2]
+    }
+}
+
+impl Deref for ColorRGB {
+    type Target = [u8; 3];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<Rgb<u8>> for ColorRGB {
+    fn from(value: Rgb<u8>) -> Self {
+        ColorRGB(value.0)
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PaletteRGB(Vec<ColorRGB>);
 
 impl PaletteRGB {
     /// Constructs a palette from a `HashSet` of `Rgb<u8>` colors.
     pub fn from_hashset(input_set: HashSet<Rgb<u8>>) -> Self {
-        PaletteRGB(input_set.into_iter().collect())
+        PaletteRGB(input_set.into_iter().map(|c| c.into()).collect())
     }
     
     /// Extracts a palette from an image by collecting unique pixel colors.
@@ -51,17 +102,17 @@ impl PaletteRGB {
     /// Returns a palette containing only black and white.
     pub fn black_and_white() -> Self {
         PaletteRGB(vec![
-            Rgb([0, 0, 0]),
-            Rgb([255, 255, 255]),
+            ColorRGB([0, 0, 0]),
+            ColorRGB([255, 255, 255]),
         ])
     }
 
     /// Returns a palette of primary colors: red, green, and blue.
     pub fn primary() -> Self {
         PaletteRGB(vec![
-            Rgb([255, 0, 0]),
-            Rgb([0, 255, 0]),
-            Rgb([0, 0, 255]),
+            ColorRGB([255, 0, 0]),
+            ColorRGB([0, 255, 0]),
+            ColorRGB([0, 0, 255]),
         ])
     }
 
@@ -83,13 +134,47 @@ impl PaletteRGB {
         let colors = (0..steps)
             .map(|step| {
                 let channel_value = ((255 * step) / (steps - 1)) as u8;
-                Rgb([channel_value, channel_value, channel_value])
+                ColorRGB([channel_value, channel_value, channel_value])
             })
             .collect::<Vec<_>>();
 
         PaletteRGB(colors)
     }
 
+    /// Attempts to reduce the number of colors in the palette to a specified target count.
+    ///
+    /// This method is useful when you want to simplify a color palette by reducing the number
+    /// of distinct colors while preserving the overall color harmony as much as possible. It 
+    /// uses a clustering technique to find the best fitting centroids that represent the reduced 
+    /// color set.
+    ///
+    /// # Parameters
+    /// - `target_colors_count`: The desired number of colors in the reduced palette.
+    ///
+    /// # Returns
+    /// - `Ok(Self)`: If the palette was successfully reduced to the target number of colors.
+    /// - `Err(PaletteError::NotEnoughColors)`: If the requested number of colors is greater than 
+    ///   the current number of colors in the palette.
+    ///
+    /// # Errors
+    /// - `PaletteError::NotEnoughColors`: Returned when the requested number of colors is greater 
+    ///   than the available number of colors in the palette.
+    ///
+    /// # Panics
+    /// This method does not panic.
+    ///
+    /// # Example
+    /// ```
+    /// use ditherum::palette::PaletteRGB;
+    /// 
+    /// let palette = PaletteRGB::primary();
+    ///
+    /// let reduced_palette = palette.try_reduce(2).expect("Failed to reduce colors");
+    /// println!("{:?}", reduced_palette);
+    /// ```
+    ///
+    /// In this example, the palette is reduced to 2 colors while maintaining the color balance
+    /// using a clustering algorithm to find the best fitting centroids.
     pub fn try_reduce(self, target_colors_count: usize) -> Result<Self, self::errors::PaletteError> {
         match self.len().cmp(&target_colors_count) {
 
@@ -117,6 +202,60 @@ impl PaletteRGB {
             },
         }
     }
+
+    /// Saves the palette to a JSON file at the specified path.
+    ///
+    /// # Parameters
+    /// - `path`: The file path where the JSON data should be saved.
+    ///
+    /// # Errors
+    /// - Returns an `io::Error` if there is an issue creating or writing to the file.
+    ///
+    /// # Example
+    /// ```
+    /// use ditherum::palette::PaletteRGB;
+    /// 
+    /// let palette = PaletteRGB::primary();
+    /// 
+    /// palette.save_to_json("tmp_palette.json").expect("Failed to save palette");
+    /// ```
+    pub fn save_to_json<P>(&self, path: P) -> Result<(), PaletteError> 
+    where 
+        P: AsRef<Path>
+    {
+        let file = File::create(path)?;
+        let writer = BufWriter::new(file);
+        serde_json::to_writer_pretty(writer, self)?;
+        Ok(())
+    }
+    
+    /// Loads the palette from a JSON file at the specified path.
+    ///
+    /// # Parameters
+    /// - `path`: The file path from which to read the JSON data.
+    ///
+    /// # Returns
+    /// - `Ok(PaletteRGB)`: If the JSON data is successfully parsed into a `PaletteRGB`.
+    /// - `Err(io::Error)`: If there is an issue reading the file.
+    /// - `Err(serde_json::Error)`: If there is an issue parsing the JSON data.
+    ///
+    /// # Example
+    /// ```
+    /// use ditherum::palette::PaletteRGB;
+    /// 
+    /// let palette = PaletteRGB::load_from_json("tmp_palette.json").expect("Failed to load palette");
+    /// println!("{:?}", palette);
+    /// ```
+    pub fn load_from_json<P>(path: P) -> Result<Self, PaletteError> 
+    where 
+        P: AsRef<Path>
+    {
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        let pallete = serde_json::from_reader(reader)?;
+        Ok(pallete)
+    }
+
 }
 
 impl From<PaletteRGB> for Vec<Lab> {
@@ -139,7 +278,7 @@ impl From<Vec<Lab>> for PaletteRGB {
         let new_rgb_colors = Vec::<Srgb>::from_color(value);
 
         let result_rgb_colors = new_rgb_colors.into_iter().map(|c| {
-            Rgb([
+            ColorRGB([
                 (c.red * 255.0).round() as u8,
                 (c.green * 255.0).round() as u8,
                 (c.blue * 255.0).round() as u8
@@ -152,7 +291,7 @@ impl From<Vec<Lab>> for PaletteRGB {
 
 /// Allows treating `PaletteRGB` as a slice of `Rgb<u8>`.
 impl Deref for PaletteRGB {
-    type Target = Vec<Rgb<u8>>;
+    type Target = Vec<ColorRGB>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -210,8 +349,8 @@ mod tests {
         assert_eq!(palette.len(), steps);
 
         // Check endpoints are black and white.
-        assert_eq!(palette[0], Rgb([0, 0, 0]));
-        assert_eq!(palette[steps - 1], Rgb([255, 255, 255]));
+        assert_eq!(palette[0], ColorRGB([0, 0, 0]));
+        assert_eq!(palette[steps - 1], ColorRGB([255, 255, 255]));
     }
 
     #[test]
@@ -240,6 +379,6 @@ mod tests {
         assert!(reduced_palette.is_ok());
         let reduced_palette = reduced_palette.unwrap();
         let reduced_color = reduced_palette[0];
-        assert_eq!(reduced_color, Rgb::<u8>([119, 119, 119]));
+        assert_eq!(reduced_color, ColorRGB([119, 119, 119]));
     }
 }
