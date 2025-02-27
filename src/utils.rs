@@ -2,6 +2,7 @@ pub mod algorithms {
     use std::fmt::Debug;
     use rand::seq::IndexedRandom;
     
+    const MULTITHREADE_ITEMS_COUNT_THRESHOLD: usize = 50;
     const CONVERGE_THRESHOLD: f32 = 0.05;
     const CONVERGE_ENOUGH_THRESHOLD: f32 = 0.5;
     const ITERATION_MAX_COUNT: usize = 40;
@@ -89,39 +90,158 @@ pub mod algorithms {
         closest_centroid_idx
     }
 
-    /// Assigns each item in the input slice to the closest centroid.
+    /// Assigns each item in the input batch to the closest centroid. Used as work in the 
+    /// multithreaded wariant.
+    ///
+    /// # Description
+    /// This function processes a batch of data points (`input_batch`) and assigns each point to the
+    /// closest centroid based on the provided `distance_measure`. The result is a vector of clusters,
+    /// where each cluster is a vector of data points assigned to one centroid.
     ///
     /// # Parameters
-    ///
-    /// * `input` - A slice of data points.
+    /// * `input_batch` - A slice of data points to be assigned to clusters.
     /// * `centroids` - A slice of current centroid points.
     /// * `distance_measure` - A function or closure that calculates the distance between two points.
     ///
     /// # Returns
-    ///
     /// A vector of clusters, where each cluster is a vector of data points assigned to one centroid.
+    fn get_filled_batch_cluster<T, D>(
+        input_batch: &[T],
+        centroids: &[T],
+        distance_measure: &D
+    ) -> Vec<Vec<T>>
+    where
+        T: Debug + Copy + Clone + Send + Sync,
+        D: Fn(&T, &T) -> f32 + Send + Sync
+    {
+        let mut batch_clusters = vec![vec![]; centroids.len()];
+
+        input_batch.iter().for_each(|item| {
+            let closest_centroid_idx = find_closest_centroid_idx(
+                item, 
+                centroids, 
+                distance_measure
+            );
+            batch_clusters[closest_centroid_idx].push(*item);
+        });
+
+        batch_clusters
+    }
+
+    /// Assigns items to the closest centroid using multithreading.
+    ///
+    /// # Description
+    /// This function divides the input data into chunks, processing each chunk in parallel using multiple threads.
+    /// It then merges the partial results to form the final clusters. Each item in the input slice is assigned 
+    /// to the closest centroid based on the specified distance measure.
+    ///
+    /// # Parameters
+    /// * `input` - A slice of data points to be assigned to clusters.
+    /// * `centroids` - A slice of current centroid points.
+    /// * `distance_measure` - A function or closure that calculates the distance between two points.
+    ///
+    /// # Returns
+    /// A vector of clusters, where each cluster is a vector of data points assigned to one centroid.
+    ///
+    /// # Multithreading Details
+    /// * Utilizes all available CPU cores for concurrent processing.
+    /// * Divides the input into `workers_count` chunks for load balancing.
+    /// * Aggregates the results from each thread to form the final clusters.
+    fn get_filled_cluster_multithreaded<T, D>(
+        input: &[T],
+        centroids: &[T],
+        distance_measure: &D
+    ) -> Vec<Vec<T>>
+    where
+        T: Debug + Copy + Clone + Send + Sync,
+        D: Fn(&T, &T) -> f32 + Send + Sync
+    {
+        // Use all cores. Logical cores = doubled physical cores with hyperthreading
+        let workers_count = num_cpus::get();
+        let work_len = input.len();
+        let work_chunk_len = work_len / workers_count;
+
+        let ranges = (0..workers_count)
+            .map(|worker_idx| {
+                let from_idx = worker_idx * work_chunk_len;
+                let to_idx = if worker_idx == (workers_count - 1) {
+                    work_len
+                } else {
+                    from_idx + work_chunk_len
+                };
+                from_idx..to_idx
+            })
+            .collect::<Vec<_>>();
+
+        std::thread::scope(|s| {
+            let handlers = ranges.into_iter()
+                .map(|range| {
+                    s.spawn(move || get_filled_batch_cluster(
+                        &input[range.start..range.end],
+                        centroids,
+                        distance_measure,
+                    ))
+                })
+                .collect::<Vec<_>>();
+
+            // Collect results
+            let all_clusters = handlers.into_iter()
+                .map(|handler| handler
+                    .join()
+                    .unwrap()
+                )
+                .collect::<Vec<_>>();
+            
+            // Merge results
+            let mut clusters = vec![vec![]; centroids.len()];
+
+            for partial_clusters in all_clusters {
+                for (cluster_idx, partial_cluster) in partial_clusters.into_iter().enumerate() {
+                    clusters[cluster_idx].extend(partial_cluster);
+                }
+            }
+            
+            clusters
+        })
+    }
+
+    /// Assigns each item in the input slice to the closest centroid.
+    ///
+    /// # Description
+    /// This function is the entry point for cluster assignment. It assigns each data point to the closest
+    /// centroid by calculating distances using the provided distance measure.
+    ///
+    /// It automatically selects between multithreaded and single-threaded processing based on the input size
+    /// and the number of available CPU cores:
+    /// * Uses multithreading if the input length exceeds `MULTITHREADE_ITEMS_COUNT_THRESHOLD` 
+    ///   and there are multiple CPU cores available.
+    /// * Falls back to a single-threaded approach for smaller input sizes or when only one CPU core is present.
+    ///
+    /// # Parameters
+    /// * `input` - A slice of data points to be assigned to clusters.
+    /// * `centroids` - A slice of current centroid points.
+    /// * `distance_measure` - A function or closure that calculates the distance between two points.
+    ///
+    /// # Returns
+    /// A vector of clusters, where each cluster is a vector of data points assigned to one centroid.
+    ///
+    /// # Performance
+    /// * Uses a multithreaded approach to leverage all CPU cores for larger input sizes.
+    /// * Efficiently aggregates partial results to form the final clusters.
     fn create_clusters_assignment<T, D>(
         input: &[T],
         centroids: &[T],
         distance_measure: &D
     ) -> Vec<Vec<T>>
     where
-        T: Debug + Copy + Clone,
-        D: Fn(&T, &T) -> f32
+        T: Debug + Copy + Clone + Send + Sync,
+        D: Fn(&T, &T) -> f32 + Send + Sync
     {
-        let centroids_count = centroids.len();
-        let mut clusters = vec![vec![]; centroids_count];
-
-        // Fill clusters based on distance to centroids
-        input.iter().for_each(|item| {
-            let closest_centroid_idx = find_closest_centroid_idx(
-                item, 
-                centroids, 
-                distance_measure
-            );
-            clusters[closest_centroid_idx].push(*item);
-        });
-        clusters
+        if input.len() > MULTITHREADE_ITEMS_COUNT_THRESHOLD && num_cpus::get() > 1 {
+            get_filled_cluster_multithreaded(input, centroids, distance_measure)
+        } else {
+            get_filled_batch_cluster(input, centroids, distance_measure)
+        }
     }
     
     /// Checks whether the centroids have converged.
@@ -238,8 +358,8 @@ pub mod algorithms {
     
     ) -> Result<Vec<T>, CentroidsFindError>
     where 
-        T: Debug + Copy + Clone,
-        D: Fn(&T, &T) -> f32,
+        T: Debug + Copy + Clone + Send + Sync,
+        D: Fn(&T, &T) -> f32 + Send + Sync,
         M: Fn(&[T]) -> T
     {
         validate_input(input, centroids_count)?;
@@ -322,7 +442,28 @@ pub mod algorithms {
 
             assert!(matches!(centroids, Ok(_)));
             let centroids = centroids.unwrap();
-            assert_eq!(centroids.len(), 3);
+            assert_eq!(centroids.len(), centroids_count);
+        }
+
+        #[test]
+        fn test_centroid_float_multithreaded() {
+            let input_data: Vec<f32> = (-100..100).map(|v| v as f32).collect::<Vec<_>>();
+            assert!(input_data.len() > MULTITHREADE_ITEMS_COUNT_THRESHOLD);
+
+            let centroids_count = 5;
+            let distance_measure = |a: &f32, b: &f32| { (a - b).abs() };
+            let calculate_mean = |arr: &[f32]| { arr.iter().sum::<f32>() / arr.len() as f32 };
+
+            let centroids = find_centroids(
+                &input_data, 
+                centroids_count, 
+                distance_measure, 
+                calculate_mean
+            );
+
+            assert!(matches!(centroids, Ok(_)));
+            let centroids = centroids.unwrap();
+            assert_eq!(centroids.len(), centroids_count);
         }
     }
 }

@@ -239,6 +239,59 @@
 //     processed_imd.save(absolute_dst_path).expect("Failed to save processed test image");
 // }
 
-fn main() {
+use std::fmt::Debug;
+
+
+fn process<T, P>(
+    input: &[T],
+    processor: &P
+) -> Vec<T>
+where 
+    T: Copy + Sync + Send,
+    P: Fn(&T) -> T + Sync + Send
+{
+    let workers = input.len();
+    let proc = processor;
+
+    let sth = std::thread::scope(|s| {
+        let handlers = (0..workers).map(|worker_idx| {
+            let handler = s.spawn(move || {
+                proc(&input[worker_idx])
+            });
+            handler
+        })
+        .collect::<Vec<_>>();
     
+        handlers.into_iter().map(|h| {
+            h.join().unwrap()
+        }).collect::<Vec<_>>()
+    });
+    sth
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Blah {
+    id: usize,
+    meh: usize
+}
+
+impl Blah {
+    fn new(id: usize) -> Self {
+        Self { id, meh: id * 3 }
+    }
+}
+
+fn main() {
+    let data = vec![
+        Blah::new(1),
+        Blah::new(2),
+        Blah::new(3),
+        Blah::new(4),
+    ];
+    let proc = |b: &Blah| {
+        println!("Meh"); Blah { id: b.id, meh: b.meh*10 }
+    };
+    let result = process(&data, &proc);
+
+    println!("{data:?} -> {result:?}");
 }
