@@ -1,25 +1,93 @@
-use std::path::PathBuf;
+//! # Ditherum - Image Dithering and Palette Extraction Tool
+//! 
+//! Ditherum is a command-line tool for image processing. It supports two main modes:
+//! - `dither`: Reduces the number of colors in an image using dithering techniques.
+//! - `palette`: Extracts a color palette from an image.
+//! 
+//! ## Features
+//! - Reduce colors using a fixed count or a custom palette.
+//! - Extract color palettes with optional reduction.
+//! - Verbose output for detailed execution info.
+//! 
+//! ## Usage Examples
+//! ```sh
+//! # Dithering with color reduction
+//! ditherum dither -i input.png -c 16 -o output.png
+//! 
+//! # Dithering using a predefined palette
+//! ditherum dither -i input.png -p palette.json -o output.png
+//! 
+//! # Extracting a palette from an image
+//! ditherum palette -i input.png -c 8 -o palette.json
+//! 
+//! # Verbose output
+//! ditherum -v palette -i input.png
+//! ```
 
+use std::{path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
+
+use anyhow::{Context, Ok};
 use clap::{Parser, Subcommand, Args};
-// use ditherum::palette
+use ditherum::palette::PaletteRGB;
 
-
-#[derive(Debug, Parser)]
-#[command(about = "Image dithering and palette extraction tool", long_about = None)]
-struct Cli {
-    #[command(subcommand)]
-    mode: Mode
+/// Macro for verbose output.
+/// 
+/// Prints the message only if `verbose` is `true`.
+/// 
+/// # Examples
+/// ```rust
+/// vprintln!(true, "This will be printed.");
+/// vprintln!(false, "This won't be printed.");
+/// ```
+macro_rules! vprintln {
+    ($verbose:expr, $($arg:tt)*) => {
+        if $verbose {
+            println!($($arg)*);
+        }
+    };
 }
 
+/// Main CLI structure for parsing arguments using `clap`.
+/// 
+/// Supports two modes:
+/// - `dither`: Image dithering and color reduction.
+/// - `palette`: Color palette extraction.
+/// 
+/// # Global Arguments
+#[derive(Debug, Parser)]
+#[command(version, about = "Image dithering and palette extraction tool", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    mode: Mode,
+
+    /// Additional information about execution process (optional)
+    #[arg(short = 'v', long = "verbose", value_name = "VERBOSE_ENABLED", default_value_t = false)]
+    verbose: bool  
+}
+
+/// Subcommands for selecting the operation mode.
+/// 
+/// - `Dither`: Image dithering and color reduction.
+/// - `Palette`: Color palette extraction.
 #[derive(Debug, Subcommand)]
 enum Mode {
     /// Dither mode for image processing
     Dither(DitherModeArgs),
 
     /// Palette mode for color extraction
-    Palette(PaletteModeArgs),
+    Palette(PaletteModeArgs),  
 }
 
+/// Arguments for `dither` mode.
+/// 
+/// # Required Arguments
+/// - `-i`, `--input`: Path to the input image file.
+/// 
+/// # Optional Arguments
+/// - `-o`, `--output`: Path for the output image. Defaults to an auto-generated name.
+/// - `-c`, `--colors`: Number of colors to reduce the image to. Conflicts with `--palette`.
+/// - `-p`, `--palette`: Path to the custom palette file for dithering. Conflicts with `--colors`.
+/// - `-r`, `--reduced`: Path to save the reduced palette. Requires `--colors`.
 #[derive(Debug, Args)]
 struct DitherModeArgs {
     /// Input image file path (required)
@@ -43,9 +111,17 @@ struct DitherModeArgs {
     palette_path: Option<PathBuf>,
 }
 
+/// Arguments for `palette` mode.
+/// 
+/// # Required Arguments
+/// - `-i`, `--input`: Path to the input image or palette file.
+/// 
+/// # Optional Arguments
+/// - `-o`, `--output`: Path for the output palette JSON file.
+/// - `-c`, `--colors`: Number of colors in the output palette.
 #[derive(Debug, Args)]
 struct PaletteModeArgs {
-    /// Input image file path (required)
+    /// Input image or palett file path (required)
     #[arg(short = 'i', long = "input", value_name = "INPUT_PATH")]
     input_path: PathBuf,
 
@@ -56,15 +132,8 @@ struct PaletteModeArgs {
     /// Number of colors in output palette (optional)
     #[arg(short = 'c', long = "colors", value_name = "COLORS_COUNT")]
     colors_count: Option<usize>,
-
-    /// Debug mode for timing execution (optional)
-    #[arg(short = 'd', long = "debug", value_name = "DEBUG_ENABLED", default_value_t = false)]
-    debug: bool    
 }
 
-//test with:
-//set RUST_LOG=debug && cargo run --bin ditherum -- palette -i res/test_images/karambola.PNG -c 10
-//set RUST_LOG=debug && cargo run --bin ditherum --features logging -- palette -i res/test_images/karambola.PNG -c 10
 fn main() {
     if cfg!(feature = "logging") {
         env_logger::init();
@@ -73,142 +142,68 @@ fn main() {
     let cli_args = Cli::parse();
     log::debug!("Got args: '{:?}'.", cli_args);
 
-    match cli_args.mode {
-        Mode::Dither(dither_args) => run_dither(dither_args),
-        Mode::Palette(palette_args) => run_palette(palette_args),
+    if let Err(e) = run(cli_args) {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
     }
 }
 
-fn run_dither(_args: DitherModeArgs) {
+/// Main execution flow handler.
+/// 
+/// Calls the appropriate function based on the selected mode.
+fn run(cli_args: Cli) -> anyhow::Result<()> {
+    let process_start = SystemTime::now().duration_since(UNIX_EPOCH)?;
+
+    match cli_args.mode {
+        Mode::Dither(dither_args) => run_dither(cli_args.verbose, dither_args),
+        Mode::Palette(palette_args) => run_palette(cli_args.verbose, palette_args),
+    }?;
+    
+    let process_end = SystemTime::now().duration_since(UNIX_EPOCH)?;
+    let process_duration = process_end-process_start;
+    vprintln!(cli_args.verbose, "Process done in {} seconds.", process_duration.as_secs());
+
+    Ok(())
+}
+
+/// Executes the `dither` mode logic.
+/// 
+/// Currently unimplemented. This is where the image dithering logic goes.
+fn run_dither(verbose: bool, _args: DitherModeArgs) -> anyhow::Result<()> {
+    vprintln!(verbose, "Dithering started...");
+
     unimplemented!("run_dither")
 }
 
+/// Executes the `palette` mode logic.
+/// 
+/// Loads the image, extracts the palette, and optionally reduces colors.
+fn run_palette(verbose: bool, args: PaletteModeArgs) -> anyhow::Result<()>  {
+    vprintln!(verbose, "Palette extraction started...");
 
-fn run_palette(_args: PaletteModeArgs) {
-    unimplemented!("run_palette")
+    let input_extension = args.input_path.extension().context("file missing etension")?;
+    let mut palette = if input_extension.eq_ignore_ascii_case("json") {
+        PaletteRGB::load_from_json(&args.input_path)?
+    } else {
+        let image = ditherum::image::load_image(&args.input_path)?;
+        vprintln!(verbose, "Image '{:?}' loaded successfully. Pixels count {}.", args.input_path, image.len());
+    
+        PaletteRGB::from_image(&image)
+    };
+    vprintln!(verbose, "Got palette with {} colors.", palette.len());
+
+    if let Some(output_colors_count) = args.colors_count {
+        vprintln!(verbose, "Reducing palette to {} colors started...", output_colors_count);
+        palette = palette.try_reduce(output_colors_count)?;
+        vprintln!(verbose, "Reduced palette to {} colors.", palette.len());
+    }
+
+    let output_path = args.output_path.unwrap_or_else(|| {
+        args.input_path.with_extension("json")
+    });
+
+    palette.save_to_json(&output_path)?;
+    vprintln!(verbose, "Saved to {:?}.", output_path);
+
+    Ok(())
 }
-
-
-
-
-
-
-// use clap::{Parser, Subcommand, Args};
-// use std::path::PathBuf;
-
-// #[derive(Parser)]
-// #[command(name = "ditherum")]
-// #[command(about = "Image dither and palette extraction tool", long_about = None)]
-// struct Cli {
-//     #[command(subcommand)]
-//     mode: Mode,
-// }
-
-// #[derive(Subcommand)]
-// enum Mode {
-//     /// Dither mode for image processing
-//     Dither(DitherArgs),
-
-//     /// Palette mode for color extraction
-//     Palette(PaletteArgs),
-// }
-
-// #[derive(Args)]
-// struct DitherArgs {
-//     /// Input image file (required)
-//     #[arg(short, long, value_name = "INPUT_IMAGE", required = true)]
-//     input: PathBuf,
-
-//     /// Output file (optional)
-//     #[arg(short, long, value_name = "OUTPUT_FILE")]
-//     output: Option<PathBuf>,
-
-//     /// Number of colors to reduce to (optional, conflicts with --palette)
-//     #[arg(short = 'c', long, value_name = "COLOR_COUNT", conflicts_with = "palette")]
-//     color: Option<usize>,
-
-//     /// Path to palette file (optional, conflicts with --color)
-//     #[arg(short = 'p', long, value_name = "PALETTE_FILE", conflicts_with = "color")]
-//     palette: Option<PathBuf>,
-
-//     /// Path to save the reduced palette (optional, works only with --color)
-//     #[arg(short = 'r', long, value_name = "REDUCED_PALETTE", requires = "color")]
-//     reduced: Option<PathBuf>,
-// }
-
-// #[derive(Args)]
-// struct PaletteArgs {
-//     /// Input image file (required)
-//     #[arg(short, long, value_name = "INPUT_IMAGE", required = true)]
-//     input: PathBuf,
-
-//     /// Output palette JSON file (optional)
-//     #[arg(short, long, value_name = "OUTPUT_FILE")]
-//     output: Option<PathBuf>,
-
-//     /// Number of colors in output palette (optional)
-//     #[arg(short = 'c', long, value_name = "COLOR_COUNT")]
-//     color: Option<usize>,
-
-//     /// Debug mode for timing execution (optional)
-//     #[arg(short = 'd', long, default_value_t = false)]
-//     debug: bool,
-// }
-
-// fn main() {
-//     let cli = Cli::parse();
-
-//     match cli.mode {
-//         Mode::Dither(args) => run_dither(args),
-//         Mode::Palette(args) => run_palette(args),
-//     }
-// }
-
-// fn run_dither(args: DitherArgs) {
-//     println!("Running in Dither mode");
-
-//     println!("Input Image: {:?}", args.input);
-
-//     if let Some(output) = args.output {
-//         println!("Output File: {:?}", output);
-//     } else {
-//         println!("No output specified, generating automatically...");
-//     }
-
-//     if let Some(color_count) = args.color {
-//         println!("Reducing colors to: {}", color_count);
-//         if let Some(reduced) = args.reduced {
-//             println!("Saving reduced palette to: {:?}", reduced);
-//         }
-//     }
-
-//     if let Some(palette) = args.palette {
-//         println!("Using palette from: {:?}", palette);
-//     }
-
-//     // TODO: Add your dither logic here
-// }
-
-// fn run_palette(args: PaletteArgs) {
-//     println!("Running in Palette mode");
-
-//     println!("Input Image: {:?}", args.input);
-
-//     if let Some(output) = args.output {
-//         println!("Output Palette File: {:?}", output);
-//     } else {
-//         println!("No output specified, generating automatically...");
-//     }
-
-//     if let Some(color_count) = args.color {
-//         println!("Extracting {} colors", color_count);
-//     } else {
-//         println!("Extracting full palette from the image.");
-//     }
-
-//     if args.debug {
-//         println!("Debug mode is ON.");
-//     }
-
-//     // TODO: Add your palette extraction logic here
-// }

@@ -4,8 +4,8 @@ pub mod algorithms {
     
     const MULTITHREADE_ITEMS_COUNT_THRESHOLD: usize = 50;
     const CONVERGE_THRESHOLD: f32 = 0.05;
-    const CONVERGE_ENOUGH_THRESHOLD: f32 = 0.5;
-    const ITERATION_MAX_COUNT: usize = 40;
+    const CONVERGE_ENOUGH_THRESHOLD: f32 = 0.8;
+    const ITERATION_MAX_COUNT: usize = 60;
 
     /// Errors that can occur while finding centroids using the K-means algorithm.
     #[derive(Debug, thiserror::Error)]

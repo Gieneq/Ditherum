@@ -28,13 +28,19 @@ It will install ditherum as ditherum executable.
 
 ## Usage
 
-### CLI (Upcomming) examples:
+There are 2 modes in ditherum CLI: 
+- palette used only to extract color palette from image and/or reduce palette
+- dither used to dither image using existing palett and/or palett reduction
+
+### CLI palette examples:
 
 Extract colors palette from image, reduce it to 8 colors and save to JSON:
 
 ```sh
-ditherum extract-palette --input image.png --output palette.json --colors 8
+ditherum -v palette --input image.png --output palette.json --colors 8
 ```
+
+### CLI dither (upcomming) examples:
 
 Dither image using default algorith, image size remain the same:
 
@@ -83,6 +89,25 @@ Linux:
 RUST_LOG=debug && cargo test --features logging -- --nocapture
 ```
 
+### Depelopment test cheatsheet
+
+Windows commands
+
+Help:
+```sh
+set RUST_LOG=debug && cargo run --bin ditherum -- -h
+```
+
+Verbouse palette command with color reduction to 10:
+```sh
+cargo run --bin ditherum -- -v palette -i res/test_images/karambola.PNG -c 10 -o res/test_results/karambola.json
+```
+
+Verbouse palette command with color reduction to 10 and additional debug logging:
+```sh
+set RUST_LOG=debug && cargo run --bin ditherum --features logging -- -v palette -i res/test_images/karambola.PNG -c 10 -o res/test_results/karambola.json
+```
+
 ## Palette Reducing Colors
 
 Ditherum uses a clustering technique to reduce the number of colors in a palette while preserving the overall color harmony. It converts sRGB colors to LAB so that colors are transformed more accuratelly.
@@ -108,7 +133,8 @@ let loaded_palette = PaletteRGB::load_from_json("palette.json").expect("Failed t
 - [x] Extract color palette from image
 - [x] Save and load color palette in JSON format
 - [x] Reduce color palette using K-means clustering
-- [ ] Add CLI support for dithering images using the S_F algorithm
+- [x] Add CLI palette creation/reduction
+- [ ] Add CLI support for dithering images using the Floyd-Steinberg algorithm
 - [ ] Enhance logging and error handling
 
 ## License
