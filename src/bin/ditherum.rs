@@ -204,6 +204,7 @@ fn run_palette(verbose: bool, args: PaletteModeArgs) -> anyhow::Result<()>  {
 
     palette.save_to_json(&output_path)?;
     vprintln!(verbose, "Saved to {:?}.", output_path);
+    vprintln!(verbose, "\nResulting palette:\n{}\n", palette.get_ansi_colors_visualization());
 
     Ok(())
 }

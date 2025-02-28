@@ -34,6 +34,10 @@ There are 2 modes in ditherum CLI:
 
 ### CLI palette examples:
 
+<p align="center">
+  <img width="500" alt="8 colors palette extracted from image" src="res/doc/pink_palette_8.png">
+</p>
+
 Extract colors palette from image, reduce it to 8 colors and save to JSON:
 
 ```sh
@@ -100,12 +104,12 @@ set RUST_LOG=debug && cargo run --bin ditherum -- -h
 
 Verbouse palette command with color reduction to 10:
 ```sh
-cargo run --bin ditherum -- -v palette -i res/test_images/karambola.PNG -c 10 -o res/test_results/karambola.json
+cargo run --bin ditherum -- -v palette -i res/test_images/test_pink_300.jpg -c 10 -o res/test_results/test_pink_300.json
 ```
 
 Verbouse palette command with color reduction to 10 and additional debug logging:
 ```sh
-set RUST_LOG=debug && cargo run --bin ditherum --features logging -- -v palette -i res/test_images/karambola.PNG -c 10 -o res/test_results/karambola.json
+set RUST_LOG=debug && cargo run --bin ditherum --features logging -- -v palette -i res/test_images/test_pink_300.jpg -c 10 -o res/test_results/test_pink_300.json
 ```
 
 ## Palette Reducing Colors
@@ -134,6 +138,7 @@ let loaded_palette = PaletteRGB::load_from_json("palette.json").expect("Failed t
 - [x] Save and load color palette in JSON format
 - [x] Reduce color palette using K-means clustering
 - [x] Add CLI palette creation/reduction
+- [ ] Add CLI palette visualization tool
 - [ ] Add CLI support for dithering images using the Floyd-Steinberg algorithm
 - [ ] Enhance logging and error handling
 

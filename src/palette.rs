@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fs::File, io::{BufReader, BufWriter}, ops::Deref, path::Path, vec};
+use std::{collections::HashSet, fs::File, io::{BufReader, BufWriter}, ops::{Deref, DerefMut}, path::Path, vec};
 use errors::PaletteError;
 use palette::{color_difference::Ciede2000, FromColor, Lab, Srgb};
 use image::{Rgb, RgbImage};
@@ -60,6 +60,33 @@ impl ColorRGB {
     pub fn blue(&self) -> u8 {
         self[2]
     }
+
+    pub fn as_tuple(&self) -> (u8, u8, u8) {
+        (self[0], self[1], self[2])
+    }
+
+    pub fn to_lab(&self) -> Lab {
+        let srgb = Srgb::new(
+            self.red() as f32 / 255.0,
+            self.green() as f32 / 255.0,
+            self.blue() as f32 / 255.0
+        );
+        Lab::from_color(srgb)
+    }
+}
+
+impl Ord for ColorRGB {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let self_lab = self.to_lab();
+        let other_lab = other.to_lab();
+        self_lab.l.partial_cmp(&other_lab.l).unwrap_or(std::cmp::Ordering::Equal)
+    }
+}
+
+impl PartialOrd for ColorRGB {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl Deref for ColorRGB {
@@ -82,7 +109,9 @@ pub struct PaletteRGB(Vec<ColorRGB>);
 impl PaletteRGB {
     /// Constructs a palette from a `HashSet` of `Rgb<u8>` colors.
     pub fn from_hashset(input_set: HashSet<Rgb<u8>>) -> Self {
-        PaletteRGB(input_set.into_iter().map(|c| c.into()).collect())
+        let mut result = PaletteRGB(input_set.into_iter().map(|c| c.into()).collect());
+        result.sort();
+        result
     }
     
     /// Extracts a palette from an image by collecting unique pixel colors.
@@ -96,7 +125,9 @@ impl PaletteRGB {
             }
         }
 
-        Self::from_hashset(palette_set)
+        let mut result = Self::from_hashset(palette_set);
+        result.sort();
+        result
     }
 
     /// Returns a palette containing only black and white.
@@ -197,8 +228,9 @@ impl PaletteRGB {
                     &lab_colors, 
                     target_colors_count
                 )?;
-
-                Ok(new_lab_colors.into())
+                let mut palette: PaletteRGB = new_lab_colors.into();
+                palette.sort();
+                Ok(palette)
             },
         }
     }
@@ -255,6 +287,52 @@ impl PaletteRGB {
         let pallete = serde_json::from_reader(reader)?;
         Ok(pallete)
     }
+    /// Generates a visualization of the ANSI colors in the palette.
+    /// 
+    /// This method converts each color in the palette to an ANSI background color block,
+    /// followed by the color's RGB representation.
+    /// 
+    /// # Example
+    /// ```
+    /// use ditherum::palette::PaletteRGB;
+    /// 
+    /// let palette = PaletteRGB::primary();
+    /// let visualization = palette.get_ansi_colors_visualization();
+    /// println!("{visualization}");
+    /// ```
+    /// 
+    /// This would print:
+    /// ```
+    ///  █ : (255, 0, 0)
+    ///  █ : (0, 255, 0)
+    ///  █ : (0, 0, 255)
+    /// ```
+    /// Each color block represents the corresponding RGB value.
+    /// 
+    /// # Returns
+    /// - A `String` containing the ANSI color visualization.
+    /// - Returns an empty string if the palette is empty.
+    /// 
+    /// # Notes
+    /// - This uses True Color (24-bit) ANSI escape codes, so it requires a terminal
+    ///   that supports True Color (most modern terminals do).
+    /// - If your terminal doesn't support True Color, the colors may not display correctly.
+    /// 
+    /// # See Also
+    /// - [ANSI Escape Codes](https://en.wikipedia.org/wiki/ANSI_escape_code)
+    pub fn get_ansi_colors_visualization(&self) -> String {
+        // Empty self -> unwrap to default = empty sttring
+        self.iter()
+            .map(|color| {
+                let (r, g, b) = color.as_tuple();
+                format!("\x1b[48;2;{};{};{}m  \x1b[0m: {:?}\n", r, g, b, color.0)
+            })
+            .reduce(|mut acc, line| {
+                acc += &line;
+                acc
+            })
+            .unwrap_or_default()
+    }
 
 }
 
@@ -295,6 +373,13 @@ impl Deref for PaletteRGB {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+/// Allows treating `PaletteRGB` as a mutable slice of `Rgb<u8>`.
+impl DerefMut for PaletteRGB {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
