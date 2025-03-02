@@ -2,6 +2,10 @@
 
 Ditherum is a Rust library and command-line interface (CLI) tool designed for image dithering and color palette manipulation. It currently supports extracting color palettes from images using multithreaded variant of the [K-means clustering](https://en.wikipedia.org/wiki/K-means_clustering) algorithm and allows saving and loading color palettes in JSON format. Upcoming features include dithering images using the [Floyd-Steinberg algorithm](https://en.wikipedia.org/wiki/Floyd%E2%80%93Steinberg_dithering) and expanded CLI functionality.
 
+<p align="center">
+  <img width="500" alt="Comparison dithering, thresholding and original image" src="res/doc/preview.png">
+</p>
+
 ## Features
 
 - **Extract Color Palette**: Extracts a color palette from an image using the K-means centroids algorithm.
@@ -140,6 +144,8 @@ let loaded_palette = PaletteRGB::load_from_json("palette.json").expect("Failed t
 - [x] Add CLI palette creation/reduction
 - [ ] Add CLI palette visualization tool
 - [ ] Add CLI support for dithering images using the Floyd-Steinberg algorithm
+- [ ] Add CLI image preprocessing: crop, resize, filters
+- [ ] Parameters: proc count, timeout
 - [ ] Enhance logging and error handling
 
 ## License

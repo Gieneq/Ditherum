@@ -16,12 +16,11 @@ use common::{
     SAVE_TEST_IMAGE_DIR
 };
 use ditherum::{
-    image, 
-    palette::{
-        errors::PaletteError, 
-        PaletteRGB
+    algorithms::ProcessingAlgorithm, image::{self, generate_test_gradient_image, ImageProcessor}, palette::{
+        errors::PaletteError, ColorRGB, PaletteRGB
     }
 };
+use ::image::Rgb;
 
 #[test]
 fn test_image_opening() {
@@ -122,6 +121,96 @@ fn test_saving_reduced_color_palette_and_loading_back() {
 
     let loaded_palette = loaded_palette.unwrap();
     assert_eq!(loaded_palette.len(), target_colors_count);
+}
+
+#[test]
+fn test_gradient_generated_image_saving() {
+    tests_setup();
+    let test_image = generate_test_gradient_image(
+        200, 
+        80, 
+        Rgb::<u8>([0,0,0]), 
+        Rgb::<u8>([255,255,255]), 
+    );
+
+    let save_path = std::path::Path::new(SAVE_TEST_IMAGE_DIR).join("test_gradient_image_result.png");
+    let result = image::save_image(save_path, &test_image);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_thresholding_rgb_gradient_image() {
+    tests_setup();
+    let (width, height) = (200, 80);
+    let gradient_image = generate_test_gradient_image(
+        width, 
+        height, 
+        Rgb::<u8>([0,0,0]), 
+        Rgb::<u8>([0,0,255]), 
+    );
+    // let palette = PaletteRGB::primary_bw();
+    let palette = PaletteRGB::grayscale(30);
+
+    // Reference image before dithering
+    let save_path = std::path::Path::new(SAVE_TEST_IMAGE_DIR).join("test_gradient_image_before_dither.png");
+    let result = image::save_image(save_path, &gradient_image);
+    assert!(result.is_ok());
+
+    // Processing
+    let processing_result = ImageProcessor::new(gradient_image, palette)
+        .with_algorithm(ProcessingAlgorithm::ThresholdingRgb)
+        .run();
+    assert!(processing_result.is_ok());
+    let processing_result = processing_result.unwrap();
+    assert_eq!(processing_result.width(), width);
+    assert_eq!(processing_result.height(), height);
+    
+    // Saving processing results
+    let thresh_rgb_save_path = std::path::Path::new(SAVE_TEST_IMAGE_DIR).join("test_gradient_image_thresholded_rgb.png");
+    let result = image::save_image(thresh_rgb_save_path, &processing_result);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_full_processing_with_auto_palette_image() {
+    tests_setup();
+    let test_image = load_test_image(COLOR_PINK300_IMAGE_FILENAME);
+
+    let palette = PaletteRGB::from_image(&test_image).try_reduce(8).unwrap();
+    // let palette = PaletteRGB::primary_bw();
+    // let palette = PaletteRGB::grayscale(8);
+    // let palette = PaletteRGB::from_slice(vec![
+    //         Rgb([187, 180, 147]), // some acru
+    //         Rgb([237, 31, 211]),  // bright pink
+    //         Rgb([242, 140, 224]), // pale pink
+    //         Rgb([4, 81, 16]),     // dark green
+    //         Rgb([89, 168, 26]),   // leaf green
+    //         Rgb([234, 15, 15]),   // red
+    //         Rgb([183, 196, 9]),   // yellow
+    //         Rgb([56, 146, 205]),  // skyblue
+    //         Rgb([0, 0, 0]),       // black
+    // ]);
+
+
+    // Processing setup
+    let processing_setup = [
+        (ProcessingAlgorithm::ThresholdingRgb, "full_proc_thrsh_rgb.png"),
+        (ProcessingAlgorithm::ThresholdingLab, "full_proc_thrsh_lab.png"),
+        (ProcessingAlgorithm::FloydSteinbergRgb, "full_proc_dith_fs_rgb.png"),
+        (ProcessingAlgorithm::FloydSteinbergLab, "full_proc_dith_fs_lab.png"),
+    ];
+
+    for (algorithm, filename) in processing_setup {
+        let save_path = std::path::Path::new(SAVE_TEST_IMAGE_DIR).join(filename);
+        let processing_result_rgb = ImageProcessor::new(test_image.clone(), palette.clone())
+            .with_algorithm(algorithm)
+            .run()
+            .unwrap();
+        
+        // Saving processing results
+        let result = image::save_image(&save_path, &processing_result_rgb);
+        assert!(result.is_ok(), "Failed saving to {save_path:?}");
+    }
 }
 
 #[cfg(test)]
