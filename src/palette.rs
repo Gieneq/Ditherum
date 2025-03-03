@@ -1,9 +1,8 @@
 use std::{collections::HashSet, fs::File, io::{BufReader, BufWriter}, ops::{Deref, DerefMut}, path::Path, vec};
 use errors::PaletteError;
-use palette::{color_difference::Ciede2000, FromColor, Lab, Srgb};
-use image::{Rgb, RgbImage};
+use palette::color_difference::Ciede2000;
 use serde::{Serialize, Deserialize};
-use crate::algorithms::kmean;
+use crate::{algorithms::kmean, color::{self, ColorRGB}};
 
 pub mod errors {
     use crate::algorithms::kmean::CentroidsFindError;
@@ -45,118 +44,13 @@ pub mod errors {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct ColorRGB(pub [u8; 3]);
-
-impl ColorRGB {
-    pub fn red(&self) -> u8 {
-        self[0]
-    }
-    
-    pub fn green(&self) -> u8 {
-        self[1]
-    }
-    
-    pub fn blue(&self) -> u8 {
-        self[2]
-    }
-
-    pub fn as_tuple(&self) -> (u8, u8, u8) {
-        (self[0], self[1], self[2])
-    }
-
-    pub fn to_lab(&self) -> Lab {
-        let srgb = Srgb::new(
-            self.red() as f32 / 255.0,
-            self.green() as f32 / 255.0,
-            self.blue() as f32 / 255.0
-        );
-        Lab::from_color(srgb)
-    }
-    
-    pub fn add(&self, other: &Self) -> Self {
-        let mut tmp = *self;
-        for channel in 0..3 {
-            tmp.0[channel] += other.0[channel];
-        }
-        tmp
-    }
-
-    pub fn sub(&self, other: &Self) -> Self {
-        let mut tmp = *self;
-        for channel in 0..3 {
-            tmp.0[channel] -= other.0[channel];
-        }
-        tmp
-    }
-
-    pub fn dist_squared_by_rgb(&self, other: &Self) -> u32 {
-        self.0.iter().zip(other.0.iter())
-            .map(|(&a, &b)| (a as u32).abs_diff(b as u32).pow(2))
-            .sum()
-    }
-
-    pub fn dist_by_lab(&self, other: &Self) -> f32 {
-        self.to_lab().difference(other.to_lab())
-    }
-
-    pub fn to_rgbu8(&self) -> Rgb<u8> {
-        Rgb(self.0)
-    }
-
-    pub fn from_rgbu8(rgbu8: Rgb<u8>) -> Self {
-        rgbu8.into()
-    }
-
-}
-
-impl Ord for ColorRGB {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let self_lab = self.to_lab();
-        let other_lab = other.to_lab();
-        self_lab.l.partial_cmp(&other_lab.l).unwrap_or(std::cmp::Ordering::Equal)
-    }
-}
-
-impl PartialOrd for ColorRGB {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Deref for ColorRGB {
-    type Target = [u8; 3];
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl From<Rgb<u8>> for ColorRGB {
-    fn from(value: Rgb<u8>) -> Self {
-        ColorRGB(value.0)
-    }
-}
-
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PaletteRGB(Vec<ColorRGB>);
 
 impl PaletteRGB {
-    /// Constructs a palette from a slice of `Rgb<u8>` colors.
-    pub fn from_slice(input: Vec<Rgb<u8>>) -> Self {
-        let tmp_hash_set = HashSet::from_iter(input);
-        Self::from_hashset(tmp_hash_set)
-    }
-
-    /// Constructs a palette from a `HashSet` of `Rgb<u8>` colors.
-    pub fn from_hashset(input_set: HashSet<Rgb<u8>>) -> Self {
-        let mut result = PaletteRGB(input_set.into_iter().map(|c| c.into()).collect());
-        result.sort();
-        result
-    }
     
     /// Extracts a palette from an image by collecting unique pixel colors.
-    pub fn from_image(img: &RgbImage) -> Self {
+    pub fn from_rgbu8_image(img: &image::RgbImage) -> Self {
         let mut palette_set = HashSet::new();
 
         for y in 0..img.height() {
@@ -166,14 +60,13 @@ impl PaletteRGB {
             }
         }
 
-        let mut result = Self::from_hashset(palette_set);
-        result.sort();
-        result
+        // Sorting included
+        Self::from(palette_set)
     }
 
     /// Returns a palette containing only black and white.
     pub fn black_and_white() -> Self {
-        PaletteRGB(vec![
+        PaletteRGB::from(vec![
             ColorRGB([0, 0, 0]),
             ColorRGB([255, 255, 255]),
         ])
@@ -181,7 +74,7 @@ impl PaletteRGB {
 
     /// Returns a palette of primary colors: red, green, and blue.
     pub fn primary() -> Self {
-        PaletteRGB(vec![
+        PaletteRGB::from(vec![
             ColorRGB([255, 0, 0]),
             ColorRGB([0, 255, 0]),
             ColorRGB([0, 0, 255]),
@@ -190,7 +83,7 @@ impl PaletteRGB {
 
     /// Returns a palette of colors: black, white, red, green, and blue.
     pub fn primary_bw() -> Self {
-        PaletteRGB(vec![
+        PaletteRGB::from(vec![
             ColorRGB([0,   0, 0]),
             ColorRGB([255, 0, 0]),
             ColorRGB([0, 255, 0]),
@@ -273,14 +166,14 @@ impl PaletteRGB {
             // Reduce colors count
             std::cmp::Ordering::Greater => {
 
-                let lab_colors: Vec<Lab> = self.into();
+                let lab_colors: Vec<palette::Lab> = self.into();
 
                 // Apply clusterization to find best fitting centroids
                 let new_lab_colors = find_lab_colors_centroids(
                     &lab_colors, 
                     target_colors_count
                 )?;
-                let mut palette: PaletteRGB = new_lab_colors.into();
+                let mut palette = PaletteRGB::from(new_lab_colors);
                 palette.sort();
                 Ok(palette)
             },
@@ -336,7 +229,8 @@ impl PaletteRGB {
     {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
-        let pallete = serde_json::from_reader(reader)?;
+        let mut pallete: PaletteRGB = serde_json::from_reader(reader)?;
+        pallete.sort();
         Ok(pallete)
     }
     /// Generates a visualization of the ANSI colors in the palette.
@@ -373,7 +267,7 @@ impl PaletteRGB {
         // Empty self -> unwrap to default = empty sttring
         self.iter()
             .map(|color| {
-                let (r, g, b) = color.as_tuple();
+                let (r, g, b) = color.tuple();
                 format!("\x1b[48;2;{};{};{}m  \x1b[0m: {:?}\n", r, g, b, color.0)
             })
             .reduce(|mut acc, line| {
@@ -383,11 +277,15 @@ impl PaletteRGB {
             .unwrap_or_default()
     }
 
-    pub fn to_lab(self) -> Vec<Lab> {
+    pub fn to_rgbu8(self) -> Vec<image::Rgb<u8>> {
         self.into()
     }
 
-    pub fn to_srgb(self) -> Vec<Srgb> {
+    pub fn to_srgb(self) -> Vec<palette::Srgb> {
+        self.into()
+    }
+
+    pub fn to_lab(self) -> Vec<palette::Lab> {
         self.into()
     }
 
@@ -408,49 +306,73 @@ impl PaletteRGB {
     }
 }
 
-impl From<PaletteRGB> for Vec<Lab> {
+
+
+
+
+
+
+
+
+
+
+impl<T> From<PaletteRGB> for Vec<T> 
+where 
+    T: From<ColorRGB>
+{
     fn from(value: PaletteRGB) -> Self {
-        let srgb_colors = value.iter().map(|c| {
-            Srgb::new(
-                c[0] as f32 / 255.0,
-                c[1] as f32 / 255.0,
-                c[2] as f32 / 255.0
-            )
-        }).collect::<Vec<_>>();
-
-        Vec::<Lab>::from_color(srgb_colors)
+        value.0.into_iter()
+            .map(|v| T::from(v))
+            .collect()
     }
 }
 
-impl From<PaletteRGB> for Vec<Srgb> {
-    fn from(value: PaletteRGB) -> Self {
-        let srgb_colors = value.iter().map(|c| {
-            Srgb::new(
-                c[0] as f32 / 255.0,
-                c[1] as f32 / 255.0,
-                c[2] as f32 / 255.0
-            )
-        }).collect::<Vec<_>>();
-        srgb_colors
+impl<T> From<&PaletteRGB> for Vec<T>
+where 
+    T: From<ColorRGB>,
+{
+    fn from(value: &PaletteRGB) -> Self {
+        value.0.iter()
+            .map(|&v| T::from(v))
+            .collect()
     }
 }
 
-/// Allows conversion from a vector of Lab colors into a `PaletteRGB`.
-impl From<Vec<Lab>> for PaletteRGB {
-    fn from(value: Vec<Lab>) -> Self {
-        let new_rgb_colors = Vec::<Srgb>::from_color(value);
-
-        let result_rgb_colors = new_rgb_colors.into_iter().map(|c| {
-            ColorRGB([
-                (c.red * 255.0).round() as u8,
-                (c.green * 255.0).round() as u8,
-                (c.blue * 255.0).round() as u8
-            ])
-        }).collect::<Vec<_>>();
-
-        PaletteRGB(result_rgb_colors)
+impl<T> From<HashSet<T>> for PaletteRGB 
+where 
+    T: Into<ColorRGB>
+{
+    fn from(value: HashSet<T>) -> Self {
+        let mut result = Self(value.into_iter()
+            .map(|v| v.into())
+            .collect()
+        );
+        result.sort();
+        result
     }
 }
+
+impl<T> From<Vec<T>> for PaletteRGB 
+where 
+    T: Into<ColorRGB>
+{
+    fn from(value: Vec<T>) -> Self {
+        let unique_colors: HashSet<ColorRGB> = value.into_iter().map(Into::into).collect();
+        let mut result = Self(unique_colors.into_iter().collect());
+        result.sort();
+        result
+    }
+}
+
+
+
+
+
+
+
+
+
+
 
 /// Allows treating `PaletteRGB` as a slice of `Rgb<u8>`.
 impl Deref for PaletteRGB {
@@ -479,19 +401,17 @@ impl DerefMut for PaletteRGB {
 ///
 /// A `Result` containing a vector of new Lab centroids or an error if clustering fails.
 fn find_lab_colors_centroids(
-    input: &[Lab], 
+    input: &[palette::Lab], 
     centroids_count: usize
-) -> Result<Vec<Lab>, kmean::CentroidsFindError> {
-    let lab_distance_measure = |a: &Lab, b: &Lab| {
+) -> Result<Vec<palette::Lab>, kmean::CentroidsFindError> {
+    let lab_distance_measure = |a: &palette::Lab, b: &palette::Lab| {
         a.difference(*b)
     };
 
-    let calculate_lab_mean = |arr: &[Lab]| {
+    let calculate_lab_mean = |arr: &[palette::Lab]| {
         let mut accumulator = arr.iter()
-            .fold(Lab::new(0.0, 0.0, 0.0), |mut acc, item| {
-                acc.l += item.l;
-                acc.a += item.a;
-                acc.b += item.b;
+            .fold(palette::Lab::new(0.0, 0.0, 0.0), |mut acc, item| {
+                color::manip::lab_mut_add(&mut acc, item);
                 acc
             });
         accumulator.l /= arr.len() as f32;
@@ -550,5 +470,13 @@ mod tests {
         let reduced_palette = reduced_palette.unwrap();
         let reduced_color = reduced_palette[0];
         assert_eq!(reduced_color, ColorRGB([119, 119, 119]));
+    }
+
+    #[test]
+    fn test_convertion_to_lab_and_from() {
+        let test_palette = PaletteRGB::primary_bw();
+        let lab_colors: Vec<palette::Lab> = (&test_palette).into();
+        let recreated_palette = PaletteRGB::from(lab_colors);
+        assert_eq!(test_palette, recreated_palette);
     }
 }

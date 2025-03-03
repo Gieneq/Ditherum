@@ -81,7 +81,9 @@ where
     // Unwrape should be safe here, distance shoul be valid not-negative value.
     let closest_centroid = distances_to_centroids
         .min_by(|(_, a_dist), (_, b_dist)| {
-            a_dist.partial_cmp(b_dist).expect("Distance comparison failed")
+            a_dist.partial_cmp(b_dist).unwrap_or_else(|| {
+                panic!("Distance comparison failed at item={item:?}, a_dist={a_dist:?}, b_dist={b_dist:?}");
+            })
         });
     
     // Safe unwrap, assignment is not empty

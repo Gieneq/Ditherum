@@ -188,7 +188,7 @@ fn run_palette(verbose: bool, args: PaletteModeArgs) -> anyhow::Result<()>  {
         let image = ditherum::image::load_image(&args.input_path)?;
         vprintln!(verbose, "Image '{:?}' loaded successfully. Pixels count {}.", args.input_path, image.len());
     
-        PaletteRGB::from_image(&image)
+        PaletteRGB::from_rgbu8_image(&image)
     };
     vprintln!(verbose, "Got palette with {} colors.", palette.len());
 

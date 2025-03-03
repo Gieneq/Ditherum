@@ -157,7 +157,7 @@ pub mod f_s_rgb {
 }
 
 pub mod thresholding {
-    use crate::palette::ColorRGB;
+    use crate::color::ColorRGB;
 
     use super::*;
 

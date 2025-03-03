@@ -17,7 +17,7 @@ use common::{
 };
 use ditherum::{
     algorithms::ProcessingAlgorithm, image::{self, generate_test_gradient_image, ImageProcessor}, palette::{
-        errors::PaletteError, ColorRGB, PaletteRGB
+        errors::PaletteError, PaletteRGB
     }
 };
 use ::image::Rgb;
@@ -42,7 +42,7 @@ fn test_image_saving() {
 fn test_obtaining_palette_from_bn_w_image() {
     tests_setup();
     let test_image = load_test_image(BNW_IMAGE_FILENAME);
-    let palette = PaletteRGB::from_image(&test_image);
+    let palette = PaletteRGB::from_rgbu8_image(&test_image);
 
     // Expecting two colors: black and white.
     assert_eq!(palette.len(), 2);
@@ -52,7 +52,7 @@ fn test_obtaining_palette_from_bn_w_image() {
 fn test_reducing_bn_w_palette() {
     tests_setup();
     let test_image = load_test_image(BNW_IMAGE_FILENAME);
-    let palette = PaletteRGB::from_image(&test_image);
+    let palette = PaletteRGB::from_rgbu8_image(&test_image);
     assert_eq!(palette.len(), 2);
     let reduced_palette = palette.try_reduce(1);
     assert!(reduced_palette.is_ok());
@@ -62,7 +62,7 @@ fn test_reducing_bn_w_palette() {
 fn test_reducing_color_palette() {
     tests_setup();
     let test_image = load_test_image(COLOR_PINK300_IMAGE_FILENAME);
-    let palette = PaletteRGB::from_image(&test_image);
+    let palette = PaletteRGB::from_rgbu8_image(&test_image);
     let original_len = palette.len();
     let reduced_palette = palette.try_reduce(10);
     assert!(reduced_palette.is_ok(), "failed result={:?}", reduced_palette);
@@ -106,7 +106,7 @@ fn test_load_not_existing_palette_palette() {
 fn test_saving_reduced_color_palette_and_loading_back() {
     tests_setup();
     let test_image = load_test_image(COLOR_GRASS300_IMAGE_FILENAME);
-    let palette = PaletteRGB::from_image(&test_image);
+    let palette = PaletteRGB::from_rgbu8_image(&test_image);
     let target_colors_count = 20;
     let reduced_palette = palette.try_reduce(target_colors_count);
     assert!(reduced_palette.is_ok(), "failed result={:?}", reduced_palette);
@@ -176,10 +176,10 @@ fn test_full_processing_with_auto_palette_image() {
     tests_setup();
     let test_image = load_test_image(COLOR_PINK300_IMAGE_FILENAME);
 
-    let palette = PaletteRGB::from_image(&test_image).try_reduce(8).unwrap();
+    let palette = PaletteRGB::from_rgbu8_image(&test_image).try_reduce(8).unwrap();
     // let palette = PaletteRGB::primary_bw();
     // let palette = PaletteRGB::grayscale(8);
-    // let palette = PaletteRGB::from_slice(vec![
+    // let palette = PaletteRGB::from_slice(&vec![
     //         Rgb([187, 180, 147]), // some acru
     //         Rgb([237, 31, 211]),  // bright pink
     //         Rgb([242, 140, 224]), // pale pink
