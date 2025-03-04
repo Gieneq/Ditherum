@@ -166,6 +166,8 @@ impl From<ColorRGB> for palette::Lab {
 }
 
 pub mod manip {
+    use palette::color_difference::{Ciede2000, EuclideanDistance};
+
     use super::ColorRGB;
 
     pub fn rgbu8_to_srgb(src: image::Rgb<u8>) -> palette::Srgb {
@@ -236,6 +238,66 @@ pub mod manip {
             left.green * scalar,
             left.blue * scalar
         )
+    }
+
+    pub fn mix_color_channel(
+        mix_factor: f32, 
+        from_value: u8,
+        to_value: u8
+    ) -> u8 {
+        let mix_factor = mix_factor.clamp(0.0, 1.0);
+        let mixed_value = (1.0 - mix_factor) * (from_value as f32) + mix_factor * (to_value as f32);
+        mixed_value.round().clamp(0.0, 255.0) as u8 
+    }
+    
+    pub fn mix_rgb_colors(
+        mix_factor: f32, 
+        from_color: image::Rgb<u8>,
+        to_color: image::Rgb<u8>
+    ) -> image::Rgb<u8> {
+        image::Rgb([
+            mix_color_channel(mix_factor, from_color[0], to_color[0]),
+            mix_color_channel(mix_factor, from_color[1], to_color[1]),
+            mix_color_channel(mix_factor, from_color[2], to_color[2])
+        ])
+    }
+
+    pub fn find_closest_lab_color(lab_color: &palette::Lab, palette: &[palette::Lab]) -> (palette::Lab, palette::Lab) {
+        let (_, &closest_palette_color) = palette.iter()
+            .map(|palette_color| {
+                let diff = lab_color.difference(*palette_color);
+                (diff, palette_color)
+            })
+            .min_by(|(diff_a, _), (diff_b, _)| diff_a.partial_cmp(diff_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
+            )
+            .unwrap();
+    
+        let quant_err = lab_sub(lab_color, &closest_palette_color);
+        (closest_palette_color, quant_err)
+    }
+    
+    pub fn find_closest_srgb_color(srgb_color: &palette::Srgb, palette: &[palette::Srgb]) -> palette::Srgb {
+        let (_, &closest_palette_color) = palette.iter()
+            .map(|palette_color| {
+                let diff = srgb_color.distance_squared(*palette_color);
+                (diff, palette_color)
+            })
+            .min_by(|(diff_a, _), (diff_b, _)| diff_a.partial_cmp(diff_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
+            )
+            .unwrap();
+    
+        closest_palette_color
+    }
+    
+    #[test]
+    fn test_channel_mix() {
+        let mix_factor = 0.25;
+        let from_value = 0;
+        let to_value = 100;
+        let result = mix_color_channel(mix_factor, from_value, to_value);
+        assert_eq!(result, 25);
     }
 }
 

@@ -12,7 +12,6 @@
 /// self:
 /// - ColorRGB ([u8; 3] same as image::Rgb<u8> but can be easly serialized) 
 ///
-
 pub mod algorithms;
 pub mod image;
 pub mod color;

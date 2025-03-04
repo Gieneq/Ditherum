@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use image::{ImageResult, Rgb, RgbImage};
+use image::{ImageResult, RgbImage};
 
-use crate::{algorithms::{color_manip, processing, ProcessingAlgorithm}, palette::PaletteRGB};
+use crate::{algorithms::{processing, ProcessingAlgorithm}, palette::PaletteRGB};
 
 pub fn load_image<P>(path: P) -> ImageResult<RgbImage> 
 where 
@@ -22,8 +22,8 @@ where
 pub fn generate_test_gradient_image(
     width: u32, 
     height: u32,
-    from_color: Rgb<u8>,
-    to_color: Rgb<u8>
+    from_color: image::Rgb<u8>,
+    to_color: image::Rgb<u8>
 ) -> RgbImage {
     if width == 0 {
         panic!("Width should be > 0");
@@ -37,7 +37,7 @@ pub fn generate_test_gradient_image(
 
     for x in 0..width {
         let mix_factor = (x as f32) / (width - 1) as f32;
-        let pixel_color = color_manip::mix_rgb_colors(mix_factor, from_color, to_color);
+        let pixel_color = super::color::manip::mix_rgb_colors(mix_factor, from_color, to_color);
         (0..height).for_each(|y| {
             *img.get_pixel_mut(x, y) = pixel_color;
         });
@@ -77,14 +77,60 @@ impl ImageProcessor {
     }
 }
 
+pub mod manip {
+    use palette::white_point::D65;
+
+    use crate::color;
+
+    use super::*;
+    
+    pub fn rgb_image_to_float_srgb_vec(source_image: RgbImage) -> (usize, usize, Vec<Vec<palette::Srgb>>) {
+        let (width, height) = (source_image.width() as usize, source_image.height() as usize);
+        let mut lab_image = vec![vec![palette::Srgb::new(0.0, 0.0, 0.0); width]; height];
+        
+        source_image.enumerate_pixels()
+            .for_each(|(x, y, rgb_pixel)| {
+                lab_image[y as usize][x as usize] = color::manip::rgbu8_to_srgb(*rgb_pixel)
+            });
+
+        (width, height, lab_image)
+    }
+
+    pub fn rgb_image_to_lab_vec(source_image: RgbImage) -> (usize, usize, Vec<Vec<palette::Lab<D65,f32>>>) {
+        let (width, height) = (source_image.width() as usize, source_image.height() as usize);
+        let mut lab_image = vec![vec![palette::Lab::new(0.0, 0.0, 0.0); width]; height];
+        
+        source_image.enumerate_pixels()
+            .for_each(|(x, y, rgb_pixel)| {
+                lab_image[y as usize][x as usize] = color::manip::rgbu8_to_lab(*rgb_pixel)
+            });
+
+        (width, height, lab_image)
+    }
+
+    pub fn lab_vec_to_rgb_iamge(width: usize, height: usize, lab_vec: Vec<Vec<palette::Lab>>) -> RgbImage {
+        RgbImage::from_fn(width as u32, height as u32, |x, y| {
+            let lab_color = &lab_vec[y as usize][x as usize];
+            color::manip::lab_to_rgbu8(*lab_color)
+        })
+    }
+
+    pub fn srgb_vec_to_rgb_iamge(width: usize, height: usize, rgb_vec: Vec<Vec<palette::Srgb>>) -> RgbImage {
+        RgbImage::from_fn(width as u32, height as u32, |x, y| {
+            let srgb_color = &rgb_vec[y as usize][x as usize];
+            color::manip::srgb_to_rgbu8(*srgb_color)
+        })
+    }
+}
+
 #[test]
 fn test_processing_gradient_image() {
     let (width, height) = (200, 80);
     let source_image = generate_test_gradient_image(
         width, 
         height, 
-        Rgb::<u8>([0,0,0]), 
-        Rgb::<u8>([0,0,255]), 
+        image::Rgb::<u8>([0,0,0]), 
+        image::Rgb::<u8>([0,0,255]), 
     );
     let palette = PaletteRGB::primary();
 

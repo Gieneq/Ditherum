@@ -304,17 +304,13 @@ impl PaletteRGB {
             .unwrap();
         color
     }
+
+    pub fn combine(&mut self, mut other: Self) {
+        self.append(&mut other);
+        self.dedup();
+        self.sort();
+    }
 }
-
-
-
-
-
-
-
-
-
-
 
 impl<T> From<PaletteRGB> for Vec<T> 
 where 
@@ -363,16 +359,6 @@ where
         result
     }
 }
-
-
-
-
-
-
-
-
-
-
 
 /// Allows treating `PaletteRGB` as a slice of `Rgb<u8>`.
 impl Deref for PaletteRGB {
@@ -478,5 +464,17 @@ mod tests {
         let lab_colors: Vec<palette::Lab> = (&test_palette).into();
         let recreated_palette = PaletteRGB::from(lab_colors);
         assert_eq!(test_palette, recreated_palette);
+    }
+
+    #[test]
+    fn test_combining_palettes() {
+        let bw_palette = PaletteRGB::black_and_white();
+        let mut primary_palette = PaletteRGB::primary();
+        primary_palette.combine(bw_palette);
+        let combined_palette = primary_palette;
+
+        let expected_combined_palette = PaletteRGB::primary_bw();
+        assert_eq!(combined_palette, expected_combined_palette)
+
     }
 }

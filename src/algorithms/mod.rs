@@ -1,8 +1,8 @@
 pub mod kmean;
-pub mod color_manip;
-pub mod image_proc;
+pub mod processings;
+pub mod thresholding;
+pub mod dithering;
 
-use image_proc::*;
 use image::RgbImage;
 use crate::palette::PaletteRGB;
 
@@ -17,7 +17,7 @@ pub fn processing(source_image: RgbImage, palette: PaletteRGB, algorithm: Proces
     match algorithm {
         ProcessingAlgorithm::ThresholdingRgb => thresholding::thresohlding_rgb(source_image, palette),
         ProcessingAlgorithm::ThresholdingLab => thresholding::thresohlding_lab(source_image, palette),
-        ProcessingAlgorithm::FloydSteinbergRgb => f_s_rgb::dithering_floyd_steinberg_rgb(source_image, palette),
-        ProcessingAlgorithm::FloydSteinbergLab => f_s_lab::dithering_floyd_steinberg_lab(source_image, palette),
+        ProcessingAlgorithm::FloydSteinbergRgb => dithering::dithering_floyd_steinberg_rgb(source_image, palette),
+        ProcessingAlgorithm::FloydSteinbergLab => dithering::dithering_floyd_steinberg_lab(source_image, palette),
     }
 }
