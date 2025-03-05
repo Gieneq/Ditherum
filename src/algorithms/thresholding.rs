@@ -1,6 +1,6 @@
-use crate::color::ColorRGB;
+use image::RgbImage;
 
-use super::*;
+use crate::{color::ColorRGB, palette::PaletteRGB};
 
 pub fn thresohlding_rgb(mut source_image: RgbImage, palette: PaletteRGB) -> RgbImage {
     source_image.enumerate_pixels_mut()

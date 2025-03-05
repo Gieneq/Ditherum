@@ -2,7 +2,26 @@ use std::path::Path;
 
 use image::{ImageResult, RgbImage};
 
-use crate::{algorithms::{processing, ProcessingAlgorithm}, palette::PaletteRGB};
+use crate::{algorithms::{dithering, thresholding}, palette::PaletteRGB};
+
+#[derive(Debug)]
+pub enum ProcessingAlgorithm {
+    ThresholdingRgb,
+    ThresholdingLab,
+    FloydSteinbergRgb,
+}
+
+#[derive(Debug)]
+pub enum ImageProcessingError {
+
+}
+
+#[derive(Debug)]
+pub struct ImageProcessor {
+    source_image: RgbImage,
+    palette: PaletteRGB,
+    algorithm: ProcessingAlgorithm,
+}
 
 pub fn load_image<P>(path: P) -> ImageResult<RgbImage> 
 where 
@@ -46,17 +65,6 @@ pub fn generate_test_gradient_image(
     img
 }
 
-pub struct ImageProcessor {
-    source_image: RgbImage,
-    palette: PaletteRGB,
-    algorithm: ProcessingAlgorithm,
-}
-
-#[derive(Debug)]
-pub enum ImageProcessingError {
-
-}
-
 impl ImageProcessor {
     pub fn new(source_image: RgbImage, palette: PaletteRGB) -> Self {
         Self {
@@ -72,7 +80,11 @@ impl ImageProcessor {
     }
 
     pub fn run(self) -> Result<RgbImage, ImageProcessingError>{
-        let result_image = processing(self.source_image, self.palette, self.algorithm);
+        let result_image = match self.algorithm {
+            ProcessingAlgorithm::ThresholdingRgb => thresholding::thresohlding_rgb(self.source_image, self.palette),
+            ProcessingAlgorithm::ThresholdingLab => thresholding::thresohlding_lab(self.source_image, self.palette),
+            ProcessingAlgorithm::FloydSteinbergRgb => dithering::dithering_floyd_steinberg_rgb(self.source_image, self.palette),
+        };
         Ok(result_image)
     }
 }
@@ -119,6 +131,13 @@ pub mod manip {
         RgbImage::from_fn(width as u32, height as u32, |x, y| {
             let srgb_color = &rgb_vec[y as usize][x as usize];
             color::manip::srgb_to_rgbu8(*srgb_color)
+        })
+    }
+
+    pub fn srgb_vec_to_rgb_image_using_palette(width: usize, height: usize, rgb_vec: Vec<Vec<palette::Srgb>>, palette: &PaletteRGB) -> RgbImage {
+        RgbImage::from_fn(width as u32, height as u32, |x, y| {
+            let srgb_color = &rgb_vec[y as usize][x as usize];
+            palette.find_closest_by_srgb(srgb_color).into()
         })
     }
 }

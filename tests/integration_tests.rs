@@ -16,8 +16,15 @@ use common::{
     SAVE_TEST_IMAGE_DIR
 };
 use ditherum::{
-    algorithms::ProcessingAlgorithm, image::{self, generate_test_gradient_image, ImageProcessor}, palette::{
-        errors::PaletteError, PaletteRGB
+    image::{
+        self, 
+        generate_test_gradient_image, 
+        ImageProcessor,
+        ProcessingAlgorithm
+    }, 
+    palette::{
+        errors::PaletteError, 
+        PaletteRGB
     }
 };
 use ::image::Rgb;
@@ -172,32 +179,21 @@ fn test_thresholding_rgb_gradient_image() {
 }
 
 #[test]
-fn test_full_processing_with_auto_palette_image() {
+fn test_full_processing_with_auto_palette_pink_image() {
     tests_setup();
     let test_image = load_test_image(COLOR_PINK300_IMAGE_FILENAME);
 
-    let palette = PaletteRGB::from_rgbu8_image(&test_image).try_reduce(8).unwrap();
-    // let palette = PaletteRGB::primary_bw();
-    // let palette = PaletteRGB::grayscale(8);
-    // let palette = PaletteRGB::from_slice(&vec![
-    //         Rgb([187, 180, 147]), // some acru
-    //         Rgb([237, 31, 211]),  // bright pink
-    //         Rgb([242, 140, 224]), // pale pink
-    //         Rgb([4, 81, 16]),     // dark green
-    //         Rgb([89, 168, 26]),   // leaf green
-    //         Rgb([234, 15, 15]),   // red
-    //         Rgb([183, 196, 9]),   // yellow
-    //         Rgb([56, 146, 205]),  // skyblue
-    //         Rgb([0, 0, 0]),       // black
-    // ]);
-
+    let palette = PaletteRGB::from_rgbu8_image(&test_image)
+        .try_reduce(12)
+        .unwrap();
+    let save_palette_path = std::path::Path::new(SAVE_TEST_IMAGE_DIR).join("full_proc_palette.json");
+    palette.save_to_json(save_palette_path).expect("Could not save palette");
 
     // Processing setup
     let processing_setup = [
         (ProcessingAlgorithm::ThresholdingRgb, "full_proc_thrsh_rgb.png"),
         (ProcessingAlgorithm::ThresholdingLab, "full_proc_thrsh_lab.png"),
         (ProcessingAlgorithm::FloydSteinbergRgb, "full_proc_dith_fs_rgb.png"),
-        (ProcessingAlgorithm::FloydSteinbergLab, "full_proc_dith_fs_lab.png"),
     ];
 
     for (algorithm, filename) in processing_setup {
@@ -206,6 +202,43 @@ fn test_full_processing_with_auto_palette_image() {
             .with_algorithm(algorithm)
             .run()
             .unwrap();
+        
+        let recreated_palette = PaletteRGB::from_rgbu8_image(&processing_result_rgb);
+        assert_eq!(recreated_palette.len(), palette.len());
+
+        // Saving processing results
+        let result = image::save_image(&save_path, &processing_result_rgb);
+        assert!(result.is_ok(), "Failed saving to {save_path:?}");
+    }
+}
+
+#[test]
+fn test_full_processing_with_auto_palette_grass_image() {
+    tests_setup();
+    let test_image = load_test_image(COLOR_GRASS300_IMAGE_FILENAME);
+
+    let palette = PaletteRGB::from_rgbu8_image(&test_image)
+        .try_reduce(12)
+        .unwrap();
+    let save_palette_path = std::path::Path::new(SAVE_TEST_IMAGE_DIR).join("full_proc_grass_palette.json");
+    palette.save_to_json(save_palette_path).expect("Could not save palette");
+
+    // Processing setup
+    let processing_setup = [
+        (ProcessingAlgorithm::ThresholdingRgb, "full_proc_grass_thrsh_rgb.png"),
+        (ProcessingAlgorithm::ThresholdingLab, "full_proc_grass_thrsh_lab.png"),
+        (ProcessingAlgorithm::FloydSteinbergRgb, "full_proc_grass_dith_fs_rgb.png"),
+    ];
+
+    for (algorithm, filename) in processing_setup {
+        let save_path = std::path::Path::new(SAVE_TEST_IMAGE_DIR).join(filename);
+        let processing_result_rgb = ImageProcessor::new(test_image.clone(), palette.clone())
+            .with_algorithm(algorithm)
+            .run()
+            .unwrap();
+
+        let recreated_palette = PaletteRGB::from_rgbu8_image(&processing_result_rgb);
+        assert_eq!(recreated_palette.len(), palette.len());
         
         // Saving processing results
         let result = image::save_image(&save_path, &processing_result_rgb);

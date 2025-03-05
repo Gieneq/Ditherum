@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fs::File, io::{BufReader, BufWriter}, ops::{Deref, DerefMut}, path::Path, vec};
 use errors::PaletteError;
-use palette::color_difference::Ciede2000;
+use palette::color_difference::{Ciede2000, EuclideanDistance};
 use serde::{Serialize, Deserialize};
 use crate::{algorithms::kmean, color::{self, ColorRGB}};
 
@@ -115,6 +115,11 @@ impl PaletteRGB {
             .collect::<Vec<_>>();
 
         PaletteRGB(colors)
+    }
+
+    pub fn with_black_and_white(mut self) -> Self {
+        self.combine(Self::black_and_white());
+        self
     }
 
     /// Attempts to reduce the number of colors in the palette to a specified target count.
@@ -303,6 +308,14 @@ impl PaletteRGB {
             .min_by(|(diff_a, _), (diff_b, _)| diff_a.partial_cmp(diff_b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap();
         color
+    }
+
+    pub fn find_closest_by_srgb(&self, src_color: &palette::Srgb) -> ColorRGB {
+        let (_, &color) = self.iter()
+        .map(|palette_color| (src_color.distance_squared(palette_color.to_srgb()), palette_color))
+        .min_by(|(diff_a, _), (diff_b, _)| diff_a.partial_cmp(diff_b).unwrap_or(std::cmp::Ordering::Equal))
+        .unwrap();
+    color
     }
 
     pub fn combine(&mut self, mut other: Self) {
