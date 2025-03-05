@@ -4,6 +4,7 @@ use image::{ImageResult, RgbImage};
 
 use crate::{algorithms::{dithering, thresholding}, palette::PaletteRGB};
 
+/// Defines different image processing algorithms.
 #[derive(Debug)]
 pub enum ProcessingAlgorithm {
     ThresholdingRgb,
@@ -11,6 +12,7 @@ pub enum ProcessingAlgorithm {
     FloydSteinbergRgb,
 }
 
+/// Represents an image processor that applies a specified algorithm to an image.
 #[derive(Debug)]
 pub struct ImageProcessor {
     source_image: RgbImage,
@@ -18,6 +20,13 @@ pub struct ImageProcessor {
     algorithm: ProcessingAlgorithm,
 }
 
+/// Loads an image from a given file path.
+/// 
+/// # Parameters
+/// - `path`: Path to the image file.
+/// 
+/// # Returns
+/// A `Result` containing the loaded `RgbImage` or an error.
 pub fn load_image<P>(path: P) -> ImageResult<RgbImage> 
 where 
     P: AsRef<Path>
@@ -26,6 +35,14 @@ where
     Ok(img.to_rgb8())
 }
 
+/// Saves an `RgbImage` to the specified file path.
+/// 
+/// # Parameters
+/// - `path`: Destination file path.
+/// - `img`: Reference to the image to be saved.
+/// 
+/// # Returns
+/// A `Result` indicating success or failure.
 pub fn save_image<P>(path: P, img: &RgbImage) -> ImageResult<()>
 where 
     P: AsRef<Path>
@@ -33,6 +50,16 @@ where
     img.save(path)
 }
 
+/// Generates a horizontal gradient image.
+/// 
+/// # Parameters
+/// - `width`: Image width.
+/// - `height`: Image height.
+/// - `from_color`: Starting color.
+/// - `to_color`: Ending color.
+/// 
+/// # Returns
+/// A generated `RgbImage` with a color gradient.
 pub fn generate_test_gradient_image(
     width: u32, 
     height: u32,
@@ -61,6 +88,7 @@ pub fn generate_test_gradient_image(
 }
 
 impl ImageProcessor {
+    /// Creates a new `ImageProcessor` instance with a given image and palette.
     pub fn new(source_image: RgbImage, palette: PaletteRGB) -> Self {
         Self {
             source_image,
@@ -69,15 +97,17 @@ impl ImageProcessor {
         }
     }
 
+    /// Sets the processing algorithm.
     pub fn with_algorithm(mut self, algorithm: ProcessingAlgorithm) -> Self {
         self.algorithm = algorithm;
         self
     }
 
+    /// Executes the selected algorithm and processes the image.
     pub fn run(self) -> RgbImage {
         match self.algorithm {
-            ProcessingAlgorithm::ThresholdingRgb => thresholding::thresohlding_rgb(self.source_image, self.palette),
-            ProcessingAlgorithm::ThresholdingLab => thresholding::thresohlding_lab(self.source_image, self.palette),
+            ProcessingAlgorithm::ThresholdingRgb => thresholding::thresholding_rgb(self.source_image, self.palette),
+            ProcessingAlgorithm::ThresholdingLab => thresholding::thresholding_lab(self.source_image, self.palette),
             ProcessingAlgorithm::FloydSteinbergRgb => dithering::dithering_floyd_steinberg_rgb(self.source_image, self.palette),
         }
     }
@@ -91,6 +121,7 @@ pub mod manip {
 
     use super::*;
     
+    /// Converts an `RgbImage` to a 2D vector of `palette::Srgb`.
     pub fn rgb_image_to_float_srgb_vec(source_image: RgbImage) -> (usize, usize, Vec<Vec<palette::Srgb>>) {
         let (width, height) = (source_image.width() as usize, source_image.height() as usize);
         let mut lab_image = vec![vec![palette::Srgb::new(0.0, 0.0, 0.0); width]; height];
@@ -103,6 +134,7 @@ pub mod manip {
         (width, height, lab_image)
     }
 
+    /// Converts an `RgbImage` to a 2D vector of `palette::Lab<D65, f32>`.
     pub fn rgb_image_to_lab_vec(source_image: RgbImage) -> (usize, usize, Vec<Vec<palette::Lab<D65,f32>>>) {
         let (width, height) = (source_image.width() as usize, source_image.height() as usize);
         let mut lab_image = vec![vec![palette::Lab::new(0.0, 0.0, 0.0); width]; height];
@@ -115,20 +147,23 @@ pub mod manip {
         (width, height, lab_image)
     }
 
-    pub fn lab_vec_to_rgb_iamge(width: usize, height: usize, lab_vec: Vec<Vec<palette::Lab>>) -> RgbImage {
+    /// Converts a 2D vector of `palette::Lab` to an `RgbImage`.
+    pub fn lab_vec_to_rgb_image(width: usize, height: usize, lab_vec: Vec<Vec<palette::Lab>>) -> RgbImage {
         RgbImage::from_fn(width as u32, height as u32, |x, y| {
             let lab_color = &lab_vec[y as usize][x as usize];
             color::manip::lab_to_rgbu8(*lab_color)
         })
     }
 
-    pub fn srgb_vec_to_rgb_iamge(width: usize, height: usize, rgb_vec: Vec<Vec<palette::Srgb>>) -> RgbImage {
+    /// Converts a 2D vector of `palette::Srgb` to an `RgbImage`.
+    pub fn srgb_vec_to_rgb_image(width: usize, height: usize, rgb_vec: Vec<Vec<palette::Srgb>>) -> RgbImage {
         RgbImage::from_fn(width as u32, height as u32, |x, y| {
             let srgb_color = &rgb_vec[y as usize][x as usize];
             color::manip::srgb_to_rgbu8(*srgb_color)
         })
     }
 
+    /// Converts a 2D vector of `palette::Srgb` to an `RgbImage` ensuring palette coherency.
     pub fn srgb_vec_to_rgb_image_using_palette(width: usize, height: usize, rgb_vec: Vec<Vec<palette::Srgb>>, palette: &PaletteRGB) -> RgbImage {
         RgbImage::from_fn(width as u32, height as u32, |x, y| {
             let srgb_color = &rgb_vec[y as usize][x as usize];
@@ -136,6 +171,7 @@ pub mod manip {
         })
     }
 
+    /// Converts an `RgbImage` to a new size while preserving aspect ratio.
     pub fn rgb_image_reshape(src_img: RgbImage, width: Option<u32>, height: Option<u32>) -> RgbImage {
         let dyn_img = DynamicImage::from(src_img);
 

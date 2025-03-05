@@ -282,18 +282,42 @@ impl PaletteRGB {
             .unwrap_or_default()
     }
 
+    /// Converts the palette to a vector of `image::Rgb<u8>`.
+    /// 
+    /// # Returns
+    /// 
+    /// A `Vec<image::Rgb<u8>>` representing the colors.
     pub fn to_rgbu8(self) -> Vec<image::Rgb<u8>> {
         self.into()
     }
 
+    /// Converts the palette to a vector of `palette::Srgb`.
+    /// 
+    /// # Returns
+    /// 
+    /// A `Vec<palette::Srgb>` representing the colors.
     pub fn to_srgb(self) -> Vec<palette::Srgb> {
         self.into()
     }
 
+    /// Converts the palette to a vector of `palette::Lab`.
+    /// 
+    /// # Returns
+    /// 
+    /// A `Vec<palette::Lab>` representing the colors.
     pub fn to_lab(self) -> Vec<palette::Lab> {
         self.into()
     }
 
+    /// Finds the closest color in the palette to the given color using Lab distance.
+    /// 
+    /// # Parameters
+    /// 
+    /// - `src_color`: The reference color.
+    /// 
+    /// # Returns
+    /// 
+    /// The closest `ColorRGB` in the palette.
     pub fn find_closest_by_lab(&self, src_color: &ColorRGB) -> ColorRGB {
         let (_, &color) = self.iter()
             .map(|palette_color| (src_color.dist_by_lab(palette_color), palette_color))
@@ -302,6 +326,15 @@ impl PaletteRGB {
         color
     }
 
+    /// Finds the closest color in the palette to the given color using RGB squared distance.
+    /// 
+    /// # Parameters
+    /// 
+    /// - `src_color`: The reference color.
+    /// 
+    /// # Returns
+    /// 
+    /// The closest `ColorRGB` in the palette.
     pub fn find_closest_by_rgb(&self, src_color: &ColorRGB) -> ColorRGB {
         let (_, &color) = self.iter()
             .map(|palette_color| (src_color.dist_squared_by_rgb(palette_color), palette_color))
@@ -310,6 +343,15 @@ impl PaletteRGB {
         color
     }
 
+    /// Finds the closest color in the palette to the given color using Srgb squared distance.
+    /// 
+    /// # Parameters
+    /// 
+    /// - `src_color`: The reference `palette::Srgb` color.
+    /// 
+    /// # Returns
+    /// 
+    /// The closest `ColorRGB` in the palette.
     pub fn find_closest_by_srgb(&self, src_color: &palette::Srgb) -> ColorRGB {
         let (_, &color) = self.iter()
         .map(|palette_color| (src_color.distance_squared(palette_color.to_srgb()), palette_color))
@@ -318,6 +360,11 @@ impl PaletteRGB {
     color
     }
 
+    /// Combines another palette into this one, removes duplicates, and sorts it.
+    /// 
+    /// # Parameters
+    /// 
+    /// - `other`: Another `PaletteRGB` to merge.
     pub fn combine(&mut self, mut other: Self) {
         self.append(&mut other);
         self.dedup();
@@ -325,6 +372,7 @@ impl PaletteRGB {
     }
 }
 
+/// Implements conversion from `PaletteRGB` to a vector of any type that can be converted from `ColorRGB`.
 impl<T> From<PaletteRGB> for Vec<T> 
 where 
     T: From<ColorRGB>
@@ -336,6 +384,7 @@ where
     }
 }
 
+/// Implements conversion from a reference to `PaletteRGB` to a vector of any type that can be converted from `ColorRGB`.
 impl<T> From<&PaletteRGB> for Vec<T>
 where 
     T: From<ColorRGB>,
@@ -347,6 +396,7 @@ where
     }
 }
 
+/// Implements conversion from a `HashSet<T>` to `PaletteRGB`, ensuring uniqueness.
 impl<T> From<HashSet<T>> for PaletteRGB 
 where 
     T: Into<ColorRGB>
@@ -361,6 +411,7 @@ where
     }
 }
 
+/// Implements conversion from a `Vec<T>` to `PaletteRGB`, ensuring uniqueness.
 impl<T> From<Vec<T>> for PaletteRGB 
 where 
     T: Into<ColorRGB>
@@ -373,7 +424,7 @@ where
     }
 }
 
-/// Allows treating `PaletteRGB` as a slice of `Rgb<u8>`.
+/// Allows treating `PaletteRGB` as a vector of `ColorRGB`.
 impl Deref for PaletteRGB {
     type Target = Vec<ColorRGB>;
 
@@ -382,23 +433,24 @@ impl Deref for PaletteRGB {
     }
 }
 
-/// Allows treating `PaletteRGB` as a mutable slice of `Rgb<u8>`.
+/// Allows treating `PaletteRGB` as a mutable vector of `ColorRGB`.
 impl DerefMut for PaletteRGB {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-/// Clusters Lab colors using k-means and returns the new Lab centroids.
-///
+
+/// Clusters Lab colors using k-means and returns new centroids.
+/// 
 /// # Parameters
-///
+/// 
 /// - `input`: A slice of Lab colors.
-/// - `centroids_count`: The number of centroids to compute.
-///
+/// - `centroids_count`: Number of centroids to compute.
+/// 
 /// # Returns
-///
-/// A `Result` containing a vector of new Lab centroids or an error if clustering fails.
+/// 
+/// A `Result` containing new Lab centroids or an error if clustering fails.
 fn find_lab_colors_centroids(
     input: &[palette::Lab], 
     centroids_count: usize

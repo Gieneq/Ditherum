@@ -29,6 +29,7 @@ use ditherum::{
 };
 use ::image::Rgb;
 
+/// Tests opening an image file and verifying its dimensions.
 #[test]
 fn test_image_opening() {
     let test_image = load_test_image(COLOR_PINK300_IMAGE_FILENAME);
@@ -36,6 +37,7 @@ fn test_image_opening() {
     assert!(test_image.height() > 0);
 }
 
+/// Tests saving an image to disk.
 #[test]
 fn test_image_saving() {
     tests_setup();
@@ -45,6 +47,7 @@ fn test_image_saving() {
     assert!(result.is_ok());
 }
 
+/// Tests generating a black-and-white palette from an image.
 #[test]
 fn test_obtaining_palette_from_bn_w_image() {
     tests_setup();
@@ -55,6 +58,7 @@ fn test_obtaining_palette_from_bn_w_image() {
     assert_eq!(palette.len(), 2);
 }
 
+/// Tests reducing a black-and-white palette to a single color.
 #[test]
 fn test_reducing_bn_w_palette() {
     tests_setup();
@@ -64,7 +68,7 @@ fn test_reducing_bn_w_palette() {
     let reduced_palette = palette.try_reduce(1);
     assert!(reduced_palette.is_ok());
 }
-
+/// Tests reducing a color palette while maintaining a certain number of colors.
 #[test]
 fn test_reducing_color_palette() {
     tests_setup();
@@ -82,6 +86,7 @@ fn test_reducing_color_palette() {
     );
 }
 
+/// Tests loading a valid primary color palette.
 #[test]
 fn test_load_primary_palette() {
     tests_setup();
@@ -93,6 +98,7 @@ fn test_load_primary_palette() {
     assert_eq!(palette, PaletteRGB::primary());
 }
 
+/// Tests loading a corrupted palette file and handling parsing failure.
 #[test]
 fn test_load_corrupted_palette() {
     tests_setup();
@@ -101,6 +107,7 @@ fn test_load_corrupted_palette() {
     assert!(matches!(palette, Err(PaletteError::JsonParsingFailed(_))));
 }
 
+/// Tests handling an attempt to load a nonexistent palette file.
 #[test]
 fn test_load_not_existing_palette_palette() {
     tests_setup();
@@ -109,6 +116,7 @@ fn test_load_not_existing_palette_palette() {
     assert!(matches!(palette, Err(PaletteError::IoError(_))));
 }
 
+/// Tests saving and reloading a reduced color palette.
 #[test]
 fn test_saving_reduced_color_palette_and_loading_back() {
     tests_setup();
@@ -130,6 +138,7 @@ fn test_saving_reduced_color_palette_and_loading_back() {
     assert_eq!(loaded_palette.len(), target_colors_count);
 }
 
+/// Tests generating and saving a gradient image.
 #[test]
 fn test_gradient_generated_image_saving() {
     tests_setup();
@@ -145,6 +154,7 @@ fn test_gradient_generated_image_saving() {
     assert!(result.is_ok());
 }
 
+/// Tests thresholding in RGB space on a gradient image.
 #[test]
 fn test_thresholding_rgb_gradient_image() {
     tests_setup();
@@ -176,6 +186,7 @@ fn test_thresholding_rgb_gradient_image() {
     assert!(result.is_ok());
 }
 
+/// Tests full processing of a pink image using an automatically extracted palette.
 #[test]
 fn test_full_processing_with_auto_palette_pink_image() {
     tests_setup();
@@ -447,11 +458,10 @@ mod tests_cli {
         assert_eq!(base_image.width(), loaded_image.width());
         assert_eq!(base_image.height(), loaded_image.height());
 
-        let palette_from_loaded_iamge = PaletteRGB::from_rgbu8_image(&loaded_image);
-        assert_eq!(palette_from_loaded_iamge.len(), loaded_palette.len());
-        assert_eq!(palette_from_loaded_iamge, loaded_palette);
+        let palette_from_loaded_image = PaletteRGB::from_rgbu8_image(&loaded_image);
+        assert_eq!(palette_from_loaded_image.len(), loaded_palette.len());
+        assert_eq!(palette_from_loaded_image, loaded_palette);
     }
-    
     
     #[test]
     fn test_dither_resize_width() {
@@ -529,7 +539,6 @@ mod tests_cli {
         assert_eq!(target_height, loaded_image.height());
     }
     
-    
     #[test]
     fn test_dither_resize_multiple_widths() {
         // cargo test --test integration_tests test_dither_resize_multiple_widths -- --nocapture
@@ -537,7 +546,6 @@ mod tests_cli {
         let target_width_range = (1..20).map(|idx| idx * 11);
         let absolute_input_path = get_test_image_absolute_path(COLOR_GRASS300_IMAGE_FILENAME);
         
-            
         let (base_img_width, base_img_height) = {
             let base_img = image::load_image(&absolute_input_path).unwrap();
             (base_img.width(), base_img.height())
@@ -572,5 +580,4 @@ mod tests_cli {
         });
     }
     
-
 }

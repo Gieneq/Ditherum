@@ -1,10 +1,24 @@
+/// Represents a mutable 2x2 kernel over a matrix.
+/// 
+/// This struct provides mutable references to four adjacent elements in a 2x2 region.
 pub struct MutKernel2x2<'a, T> {
-    pub tl: &'a mut T,
-    pub tr: &'a mut T,
-    pub bl: &'a mut T,
-    pub br: &'a mut T,
+    pub tl: &'a mut T,  // Top-left element
+    pub tr: &'a mut T,  // Top-right element
+    pub bl: &'a mut T,  // Bottom-left element
+    pub br: &'a mut T,  // Bottom-right element
 }
 
+/// Applies a 2x2 kernel-based processing function to a mutable matrix.
+/// 
+/// This function iterates over the matrix and calls the provided function on each 2x2 submatrix.
+/// If the kernel extends beyond the matrix bounds, default values are used.
+/// 
+/// # Parameters
+/// - `matrix`: A mutable reference to a 2D vector.
+/// - `processing`: A function that takes a `MutKernel2x2<T>` and modifies the matrix accordingly.
+/// 
+/// # Panics
+/// Panics if the matrix has fewer than two rows or columns.
 pub fn apply_2x2_kernel_processing<T, P>(matrix: &mut [Vec<T>], mut processing: P)
 where 
     T: Default,

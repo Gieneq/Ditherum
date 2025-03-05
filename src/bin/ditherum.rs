@@ -11,7 +11,7 @@
 //! 
 //! ## Usage Examples
 //! ```sh
-//! # Dithering with color reduction
+//! # Dithering with color reduction to 16 colors
 //! ditherum dither -i input.png -c 16 -o output.png
 //! 
 //! # Dithering using a predefined palette
@@ -84,7 +84,9 @@ enum Mode {
 /// - `-i`, `--input`: Path to the input image file.
 /// 
 /// # Optional Arguments
-/// - `-o`, `--output`: Path for the output image. Defaults to an auto-generated name.
+/// - `-W`, `--output`: Optional width for resizing.
+/// - `-H`, `--width`: Optional height for resizing.
+/// - `-o`, `--height`: Path for the output image. Defaults to an auto-generated name.
 /// - `-c`, `--colors`: Number of colors to reduce the image to. Conflicts with `--palette`.
 /// - `-p`, `--palette`: Path to the custom palette file for dithering. Conflicts with `--colors`.
 /// - `-r`, `--reduced`: Path to save the reduced palette. Requires `--colors`.
@@ -176,7 +178,7 @@ fn run(cli_args: Cli) -> anyhow::Result<()> {
 
 /// Executes the `dither` mode logic.
 /// 
-/// Currently unimplemented. This is where the image dithering logic goes.
+/// Resizing, dithering, palette loading/saving
 fn run_dither(verbose: bool, args: DitherModeArgs) -> anyhow::Result<()> {
     vprintln!(verbose, "Dithering started...");
 

@@ -1,6 +1,6 @@
 # Ditherum
 
-Ditherum is a Rust library and command-line interface (CLI) tool designed for image dithering and color palette manipulation. It currently supports extracting color palettes from images using multithreaded variant of the [K-means clustering](https://en.wikipedia.org/wiki/K-means_clustering) algorithm and allows saving and loading color palettes in JSON format. Upcoming features include dithering images using the [Floyd-Steinberg algorithm](https://en.wikipedia.org/wiki/Floyd%E2%80%93Steinberg_dithering) and expanded CLI functionality.
+Ditherum is a Rust library and command-line interface (CLI) tool designed for image dithering and color palette manipulation. It currently supports extracting color palettes from images using multithreaded variant of the [K-means clustering](https://en.wikipedia.org/wiki/K-means_clustering) algorithm, resizing and dithering images using the [Floyd-Steinberg algorithm](https://en.wikipedia.org/wiki/Floyd%E2%80%93Steinberg_dithering).
 
 <p align="center">
   <img width="500" alt="Comparison dithering, thresholding and original image" src="res/doc/preview.png">
@@ -8,10 +8,10 @@ Ditherum is a Rust library and command-line interface (CLI) tool designed for im
 
 ## Features
 
-- **Extract Color Palette**: Extracts a color palette from an image using the K-means centroids algorithm.
+- **Extract Color Palette**: Extracts a color palette from an image.
 - **Save/Load Color Palette**: Save extracted color palettes to a JSON file or load them from a JSON file.
-- **Color Reduction**: Attempts to reduce the number of colors in a palette to a specified target using clustering techniques.
-- **Dithering (Upcoming)**: CLI support for dithering images using the S_F algorithm.
+- **Color Reduction**: Attempts to reduce the number of colors in a palette to a specified target using the K-means centroids algorithm.
+- **Dithering**: Modify image so that it resembles original with highly reduced color palette.
 
 ## Installation
 
@@ -28,13 +28,13 @@ To install the CLI tool:
 cargo install --path .
 ```
 
-It will install ditherum as ditherum executable.
+It will install this tool as `ditherum` executable.
 
 ## Usage
 
 There are 2 modes in ditherum CLI: 
 - palette used only to extract color palette from image and/or reduce palette
-- dither used to dither image using existing palett and/or palett reduction
+- dither used to dither image using existing palett and/or palette reduction with optional image resize
 
 ### CLI palette examples:
 
@@ -48,38 +48,58 @@ Extract colors palette from image, reduce it to 8 colors and save to JSON:
 ditherum -v palette --input image.png --output palette.json --colors 8
 ```
 
-### CLI dither (upcomming) examples:
+### CLI dither examples:
 
-Dither image using default algorith, image size remain the same:
-
+Dither image with default 8 colors palette, no resize:
 ```sh
-ditherum dither --input image.png --output dithered_image.png --palette palette.json
+ditherum dither --input image.png --output dithered_image.png
 ```
 
-Dither image using default algorith, image size remain the same. Additionally reduce polors palette to 8 colors:
-
+Additionaly save resulting palette:
 ```sh
-ditherum dither --input image.png --output dithered_image.png --output-palette reduced_palette.json --colors 8
+ditherum dither --input image.png --output dithered_image.png --reduced reduced.json
+```
+
+Reuse existing colors palette:
+```sh
+ditherum dither --input image.png --palette existing_palette.json
+```
+
+Resize:
+```sh
+ditherum dither --input image.png --width 240
 ```
 
 ### Library
 
 ```rust
 use ditherum::palette::PaletteRGB;
-use image::RgbImage;
+use ditherum::image::{
+    load_image, 
+    save_image, 
+    ImageProcessor, 
+    ProcessingAlgorithm
+};
 
-// Extract palette from an image
-let img = image::open("path/to/image.png").expect("Failed to open image").to_rgb8();
-let palette = PaletteRGB::from_image(&img);
+fn main() {
+    let img = load_image("image.jpg").unwrap();
+    
+    // Create palette from image and reduce to 16 clustering colors
+    let palette = PaletteRGB::from_rgbu8_image(&img)
+        .try_reduce(16)
+        .unwrap();
 
-// Save palette to JSON
-palette.save_to_json("palette.json").expect("Failed to save palette");
+    // Save palette to file
+    palette.save_to_json("palette.json").unwrap();
+    
+    // dither image using Floyd-Steinber algorithm
+    let dithered_img = ImageProcessor::new(img, palette)
+        .with_algorithm(ProcessingAlgorithm::FloydSteinbergRgb)
+        .run();
 
-// Load palette from JSON
-let loaded_palette = PaletteRGB::load_from_json("palette.json").expect("Failed to load palette");
-
-// Reduce the number of colors in the palette
-let reduced_palette = loaded_palette.try_reduce(4).expect("Failed to reduce colors");
+    // Save image to file
+    save_image("dithered.png", &dithered_img).unwrap();
+}
 ```
 
 ## Tests & Logging
@@ -96,6 +116,11 @@ Linux:
 ```sh
 RUST_LOG=debug && cargo test --features logging -- --nocapture
 ```
+
+### Benchmarking
+
+Benchmarking covers:
+- matrix modification using 2x3 kernel
 
 ### Depelopment test cheatsheet
 
@@ -116,35 +141,15 @@ Verbouse palette command with color reduction to 10 and additional debug logging
 set RUST_LOG=debug && cargo run --bin ditherum --features logging -- -v palette -i res/test_images/test_pink_300.jpg -c 10 -o res/test_results/test_pink_300.json
 ```
 
-## Palette Reducing Colors
-
-Ditherum uses a clustering technique to reduce the number of colors in a palette while preserving the overall color harmony. It converts sRGB colors to LAB so that colors are transformed more accuratelly.
-
-```rust
-let reduced_palette = palette.try_reduce(4).expect("Failed to reduce colors");
-```
-
-## Palette JSON Serialization
-
-Saving to JSON.
-```rust
-palette.save_to_json("palette.json").expect("Failed to save palette");
-```
-
-Loading from JSON.
-```rust
-let loaded_palette = PaletteRGB::load_from_json("palette.json").expect("Failed to load palette");
-```
-
 ## Roadmap
 
 - [x] Extract color palette from image
 - [x] Save and load color palette in JSON format
 - [x] Reduce color palette using K-means clustering
 - [x] Add CLI palette creation/reduction
-- [ ] Add CLI palette visualization tool
-- [ ] Add CLI support for dithering images using the Floyd-Steinberg algorithm
-- [ ] Add CLI image preprocessing: crop, resize, filters
+- [x] Add CLI palette visualization tool
+- [x] Add CLI support for dithering images using the Floyd-Steinberg algorithm
+- [x] Add CLI image resize
 - [ ] Parameters: proc count, timeout
 - [ ] Enhance logging and error handling
 

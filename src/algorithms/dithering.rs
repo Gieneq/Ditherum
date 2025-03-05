@@ -2,6 +2,24 @@ use image::RgbImage;
 use crate::{color, palette::PaletteRGB};
 use crate::algorithms::kernel;
 
+/// Applies Floyd-Steinberg dithering to an RGB image using a given color palette.
+///
+/// # Parameters
+/// - `source_image`: The input `RgbImage` to be dithered.
+/// - `palette`: A `PaletteRGB` containing the target colors for dithering.
+///
+/// # Returns
+/// - A dithered `RgbImage` that approximates the input image using the specified palette.
+///
+/// # Algorithm Details
+/// The Floyd-Steinberg dithering algorithm works by replacing each pixel with the closest
+/// color from the given palette and then distributing the quantization error to neighboring pixels
+/// using a modified 2x2 kernel:
+///
+/// ```plaintext
+///   (X)  *
+///   *    *   (error distribution)
+/// ```
 pub fn dithering_floyd_steinberg_rgb(source_image: RgbImage, palette: PaletteRGB) -> RgbImage {
     let (width, height, mut rgb_matrix) = crate::image::manip::rgb_image_to_float_srgb_vec(source_image);
     let srgb_palette = palette.clone().to_srgb();

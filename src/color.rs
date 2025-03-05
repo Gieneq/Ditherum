@@ -3,54 +3,67 @@ use std::ops::Deref;
 use palette::{color_difference::Ciede2000, FromColor};
 use serde::{Deserialize, Serialize};
 
+/// Represents an RGB color with three 8-bit components.
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ColorRGB(pub [u8; 3]);
 
 impl ColorRGB {
+    /// Returns the red component.
     pub fn red(&self) -> u8 {
         self.as_slice()[0]
     }
     
+    /// Returns the green component.
     pub fn green(&self) -> u8 {
         self.as_slice()[1]
     }
     
+    /// Returns the blue component.
     pub fn blue(&self) -> u8 {
         self.as_slice()[2]
     }
 
+    /// Returns the RGB color as a slice.
     pub fn as_slice(&self) -> &[u8; 3] {
         &self.0
     }
 
+    /// Returns the RGB color as a tuple.
     pub fn tuple(&self) -> (u8, u8, u8) {
         (self.red(), self.green(), self.blue())
     }
 
+    /// Converts from `image::Rgb<u8>`.
     pub fn from_rgbu8(rgbu8: image::Rgb<u8>) -> Self {
         Self::from(rgbu8)
     }
 
+    /// Converts from `palette::Srgb`.
     pub fn from_srgb(srgb: palette::Srgb) -> Self {
         Self::from(srgb)
     }
 
+    /// Converts from `palette::Lab`.
     pub fn from_lab(lab: palette::Lab) -> Self {
         Self::from(lab)
     }
 
+    /// Converts to `image::Rgb<u8>`.
     pub fn to_rgbu8(&self) -> image::Rgb<u8> {
         (*self).into()
     }
 
+    /// Converts to `palette::Srgb`.
     pub fn to_srgb(&self) -> palette::Srgb {
         (*self).into()
     }
 
+    /// Converts to `palette::Lab`.
     pub fn to_lab(&self) -> palette::Lab {
         (*self).into()
     }
     
+    /// Performs saturating addition of two colors.
     pub fn saturating_add(&self, other: &Self) -> Self {
         ColorRGB([
             self[0].saturating_add(other[0]),
@@ -59,6 +72,7 @@ impl ColorRGB {
         ])
     }
 
+    /// Performs saturating subtraction of two colors.
     pub fn saturating_sub(&self, other: &Self) -> Self {
         ColorRGB([
             self[0].saturating_sub(other[0]),
@@ -67,6 +81,7 @@ impl ColorRGB {
         ])
     }
 
+    /// Multiplies the color by a scalar, clamping values.
     pub fn saturating_mul_scalar(&self, scalar: f32) -> Self {
         ColorRGB([
             (self[0] as f32 * scalar).round().clamp(0.0, 255.0) as u8,
@@ -75,7 +90,7 @@ impl ColorRGB {
         ])
     }
 
-    /// Euclidean distance squared in RGB 3D space
+    /// Computes the squared Euclidean distance in RGB space.
     pub fn dist_squared_by_rgb(&self, other: &Self) -> u32 {
         self.0.iter()
             .zip(other.0.iter())
@@ -83,18 +98,19 @@ impl ColorRGB {
             .sum()
     }
     
-    /// Euclidean distance in RGB 3D space
+    /// Computes the Euclidean distance in RGB space.
     pub fn dist_by_rgb(&self, other: &Self) -> f32 {
         (self.dist_squared_by_rgb(other) as f32).sqrt()
     }
 
-    /// Converted to LAB, distance using CIEDE2000 
+    /// Computes the color difference in Lab space using CIEDE2000.
     pub fn dist_by_lab(&self, other: &Self) -> f32 {
         self.to_lab().difference(other.to_lab())
     }
 
 }
 
+/// Implements ordering based on lightness in Lab space
 impl Ord for ColorRGB {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let self_lab = self.to_lab();
@@ -109,6 +125,7 @@ impl PartialOrd for ColorRGB {
     }
 }
 
+/// Allows treating `ColorRGB` as a slice of three `u8` values.
 impl Deref for ColorRGB {
     type Target = [u8; 3];
 
@@ -117,6 +134,7 @@ impl Deref for ColorRGB {
     }
 }
 
+/// Implements conversions from and to various color representations.
 impl From<image::Rgb<u8>> for ColorRGB {
     fn from(value: image::Rgb<u8>) -> Self {
         ColorRGB([
