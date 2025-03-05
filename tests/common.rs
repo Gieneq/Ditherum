@@ -69,7 +69,7 @@ where
     img
 }
 
-pub fn get_image_absolute_path<P>(filename: P) -> PathBuf 
+pub fn get_test_image_absolute_path<P>(filename: P) -> PathBuf 
 where 
     P: AsRef<Path>
 {

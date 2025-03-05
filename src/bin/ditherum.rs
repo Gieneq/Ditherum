@@ -28,7 +28,7 @@ use std::{path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
 
 use anyhow::{Context, Ok};
 use clap::{Parser, Subcommand, Args};
-use ditherum::palette::PaletteRGB;
+use ditherum::{image::ImageProcessor, palette::PaletteRGB};
 
 /// Macro for verbose output.
 /// 
@@ -99,8 +99,8 @@ struct DitherModeArgs {
     output_path: Option<PathBuf>,
 
     /// Number of colors to reduce to (optional, conflicts with --palette)
-    #[arg(short = 'c', long = "colors", value_name = "INPUT_PATH", conflicts_with = "palette_path")]
-    colors_count: Option<usize>,
+    #[arg(short = 'c', long = "colors", value_name = "INPUT_PATH", conflicts_with = "palette_path", default_value_t = 8)]
+    colors_count: usize,
     
     /// Path to save the reduced palette (optional, works only with --color)
     #[arg(short = 'r', long = "reduced", value_name = "REDUCED_PALETTE_PATH", requires = "colors_count")]
@@ -169,10 +169,50 @@ fn run(cli_args: Cli) -> anyhow::Result<()> {
 /// Executes the `dither` mode logic.
 /// 
 /// Currently unimplemented. This is where the image dithering logic goes.
-fn run_dither(verbose: bool, _args: DitherModeArgs) -> anyhow::Result<()> {
+fn run_dither(verbose: bool, args: DitherModeArgs) -> anyhow::Result<()> {
     vprintln!(verbose, "Dithering started...");
 
-    unimplemented!("run_dither")
+    vprintln!(verbose, "Opening image {:?}...", args.input_path);
+    let image = ditherum::image::load_image(&args.input_path)?;
+    vprintln!(verbose, "Got image width={}, height={}.", image.width(), image.height());
+
+    // Fork for 2 options:
+    // - palette from input
+    // - palette generated (with optional save to file)
+    let palette = if let Some(palette_filepath) = args.palette_path {
+        PaletteRGB::load_from_json(palette_filepath)?
+    } else {
+        let mut tmp_palette = PaletteRGB::from_rgbu8_image(&image);
+
+        vprintln!(verbose, "Reducing palette to {} colors started...", args.colors_count);
+        tmp_palette = tmp_palette.try_reduce(args.colors_count)?;
+        vprintln!(verbose, "Reduced palette to {} colors.", tmp_palette.len());
+
+        tmp_palette
+    };
+    vprintln!(verbose, "\nPalette:\n{}\n", palette.get_ansi_colors_visualization());
+
+    // If palette savepath provided, save it
+    if let Some(palette_savepath) = args.reduced_palette_path {
+        vprintln!(verbose, "Saving palette to {:?}.", palette_savepath);
+        palette.save_to_json(&palette_savepath)?;
+        vprintln!(verbose, "Saved palette image to {:?}.", palette_savepath);
+    }
+
+    // Process image
+    let processed_image = ImageProcessor::new(image, palette)
+        .with_algorithm(ditherum::image::ProcessingAlgorithm::FloydSteinbergRgb)
+        .run();
+
+    let output_path = args.output_path.unwrap_or_else(|| {
+        PathBuf::from("output.png")
+    });
+
+    ditherum::image::save_image(&output_path, &processed_image)?;
+
+    vprintln!(verbose, "Saved processed image to {:?}.", output_path);
+
+    Ok(())
 }
 
 /// Executes the `palette` mode logic.

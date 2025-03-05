@@ -1,7 +1,7 @@
 mod common;
 
 use common::{
-    get_image_absolute_path,
+    get_test_image_absolute_path,
     get_palette_absolute_path, 
     get_test_save_absolute_path, 
     load_test_image, 
@@ -167,8 +167,6 @@ fn test_thresholding_rgb_gradient_image() {
     let processing_result = ImageProcessor::new(gradient_image, palette)
         .with_algorithm(ProcessingAlgorithm::ThresholdingRgb)
         .run();
-    assert!(processing_result.is_ok());
-    let processing_result = processing_result.unwrap();
     assert_eq!(processing_result.width(), width);
     assert_eq!(processing_result.height(), height);
     
@@ -200,8 +198,7 @@ fn test_full_processing_with_auto_palette_pink_image() {
         let save_path = std::path::Path::new(SAVE_TEST_IMAGE_DIR).join(filename);
         let processing_result_rgb = ImageProcessor::new(test_image.clone(), palette.clone())
             .with_algorithm(algorithm)
-            .run()
-            .unwrap();
+            .run();
         
         let recreated_palette = PaletteRGB::from_rgbu8_image(&processing_result_rgb);
         assert_eq!(recreated_palette.len(), palette.len());
@@ -234,8 +231,7 @@ fn test_full_processing_with_auto_palette_grass_image() {
         let save_path = std::path::Path::new(SAVE_TEST_IMAGE_DIR).join(filename);
         let processing_result_rgb = ImageProcessor::new(test_image.clone(), palette.clone())
             .with_algorithm(algorithm)
-            .run()
-            .unwrap();
+            .run();
 
         let recreated_palette = PaletteRGB::from_rgbu8_image(&processing_result_rgb);
         assert_eq!(recreated_palette.len(), palette.len());
@@ -255,7 +251,7 @@ mod tests_cli {
     fn test_palette_black_and_white_extraction() {
         tests_setup();
         let test_palette_filename = "sample_bw_palette.json";
-        let absolute_input_path = get_image_absolute_path(BNW_IMAGE_FILENAME);
+        let absolute_input_path = get_test_image_absolute_path(BNW_IMAGE_FILENAME);
         let absolute_output_path = get_test_save_absolute_path(test_palette_filename);
 
         // Generate black and white colors palette
@@ -280,7 +276,7 @@ mod tests_cli {
     fn test_palette_color_reduced_9_extraction() {
         tests_setup();
         let test_palette_filename = "sample_reduced_9_colors_palette.json";
-        let absolute_input_path = get_image_absolute_path(GRAY300_IMAGE_FILENAME);
+        let absolute_input_path = get_test_image_absolute_path(GRAY300_IMAGE_FILENAME);
         let absolute_output_path = get_test_save_absolute_path(test_palette_filename);
 
         // Generate black and white colors palette
@@ -400,6 +396,60 @@ mod tests_cli {
 
         let expectd_err_text = "(os error 2)";
         assert!(stderr_text.contains(expectd_err_text), "Some other error message: '{stderr_text}'");
+    }
+
+    #[test]
+    fn test_dither_simple() {
+        // cargo test --test integration_tests test_dither_simple -- --nocapture
+        tests_setup();
+        let colors_count = 2;
+        let test_output_image_filename = "simple_dithered_pink_image.png";
+        let test_output_palette_filename = "simple_dithered_pink_palette.json";
+        let absolute_input_path = get_test_image_absolute_path(COLOR_PINK300_IMAGE_FILENAME);
+        let absolute_output_path = get_test_save_absolute_path(test_output_image_filename);
+        let absolute_output_palette_path = get_test_save_absolute_path(test_output_palette_filename);
+
+        // Generate black and white colors palette
+        let mut cmd: Command = Command::cargo_bin("ditherum").unwrap();
+        cmd
+            .arg("dither")
+            .arg("-i")
+            .arg(&absolute_input_path)
+            .arg("-c")
+            .arg(colors_count.to_string())
+            .arg("-o")
+            .arg(&absolute_output_path)
+            .arg("-r")
+            .arg(&absolute_output_palette_path);
+        let output = cmd.output();
+        assert!(output.is_ok());
+
+        let output = output.unwrap();
+        assert!(output.status.success());
+        
+        // Load palette back, it shoudl have 2 colors
+        let loaded_palette = PaletteRGB::load_from_json(absolute_output_palette_path);
+        assert!(loaded_palette.is_ok());
+
+        let loaded_palette = loaded_palette.unwrap();
+        assert_eq!(loaded_palette.len(), colors_count);
+
+        // Load image, it shoudl:
+        // - has the samme width & height
+        // - consist of 2 colors
+        let base_image = image::load_image(absolute_input_path);
+        assert!(base_image.is_ok());
+        let base_image = base_image.unwrap();
+
+        let loaded_image = image::load_image(absolute_output_path);
+        assert!(loaded_image.is_ok());
+        let loaded_image = loaded_image.unwrap();
+        assert_eq!(base_image.width(), loaded_image.width());
+        assert_eq!(base_image.height(), loaded_image.height());
+
+        let palette_from_loaded_iamge = PaletteRGB::from_rgbu8_image(&loaded_image);
+        assert_eq!(palette_from_loaded_iamge.len(), loaded_palette.len());
+        assert_eq!(palette_from_loaded_iamge, loaded_palette);
     }
     
 }

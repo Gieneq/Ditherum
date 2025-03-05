@@ -12,11 +12,6 @@ pub enum ProcessingAlgorithm {
 }
 
 #[derive(Debug)]
-pub enum ImageProcessingError {
-
-}
-
-#[derive(Debug)]
 pub struct ImageProcessor {
     source_image: RgbImage,
     palette: PaletteRGB,
@@ -79,13 +74,12 @@ impl ImageProcessor {
         self
     }
 
-    pub fn run(self) -> Result<RgbImage, ImageProcessingError>{
-        let result_image = match self.algorithm {
+    pub fn run(self) -> RgbImage {
+        match self.algorithm {
             ProcessingAlgorithm::ThresholdingRgb => thresholding::thresohlding_rgb(self.source_image, self.palette),
             ProcessingAlgorithm::ThresholdingLab => thresholding::thresohlding_lab(self.source_image, self.palette),
             ProcessingAlgorithm::FloydSteinbergRgb => dithering::dithering_floyd_steinberg_rgb(self.source_image, self.palette),
-        };
-        Ok(result_image)
+        }
     }
 }
 
@@ -155,9 +149,6 @@ fn test_processing_gradient_image() {
 
     let processing_result = ImageProcessor::new(source_image, palette)
         .run();
-    assert!(processing_result.is_ok());
-
-    let processing_result = processing_result.unwrap();
     assert_eq!(processing_result.width(), width);
     assert_eq!(processing_result.height(), height);
 }
