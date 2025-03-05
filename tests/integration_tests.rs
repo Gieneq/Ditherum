@@ -452,4 +452,125 @@ mod tests_cli {
         assert_eq!(palette_from_loaded_iamge, loaded_palette);
     }
     
+    
+    #[test]
+    fn test_dither_resize_width() {
+        // cargo test --test integration_tests test_dither_resize_width -- --nocapture
+        tests_setup();
+        let target_width = 90;
+        let test_output_image_filename = "resize_width_dithered_grass_image.png";
+        let absolute_input_path = get_test_image_absolute_path(COLOR_GRASS300_IMAGE_FILENAME);
+        let absolute_output_path = get_test_save_absolute_path(test_output_image_filename);
+
+        // Generate black and white colors palette
+        let mut cmd: Command = Command::cargo_bin("ditherum").unwrap();
+        cmd
+            .arg("dither")
+            .arg("-i")
+            .arg(&absolute_input_path)
+            .arg("-W")
+            .arg(target_width.to_string())
+            .arg("-o")
+            .arg(&absolute_output_path);
+        let output = cmd.output();
+        assert!(output.is_ok());
+
+        let output = output.unwrap();
+        assert!(output.status.success(), "cmd output={output:?}.");
+        
+        let (base_img_width, base_img_height) = {
+            let base_img = image::load_image(absolute_input_path).unwrap();
+            (base_img.width(), base_img.height())
+        };
+        let expected_height = (target_width as f32 * base_img_height as f32 / base_img_width as f32).round() as u32;
+
+        let loaded_image = image::load_image(absolute_output_path);
+        assert!(loaded_image.is_ok());
+        let loaded_image = loaded_image.unwrap();
+        assert_eq!(target_width, loaded_image.width());
+        assert_eq!(expected_height, loaded_image.height());
+    }
+    
+    #[test]
+    fn test_dither_resize_height() {
+        // cargo test --test integration_tests test_dither_resize_height -- --nocapture
+        tests_setup();
+        let target_height = 123;
+        let test_output_image_filename = "resize_height_dithered_grass_image.png";
+        let absolute_input_path = get_test_image_absolute_path(COLOR_GRASS300_IMAGE_FILENAME);
+        let absolute_output_path = get_test_save_absolute_path(test_output_image_filename);
+
+        // Generate black and white colors palette
+        let mut cmd: Command = Command::cargo_bin("ditherum").unwrap();
+        cmd
+            .arg("dither")
+            .arg("-i")
+            .arg(&absolute_input_path)
+            .arg("-H")
+            .arg(target_height.to_string())
+            .arg("-o")
+            .arg(&absolute_output_path);
+        let output = cmd.output();
+        assert!(output.is_ok());
+
+        let output = output.unwrap();
+        assert!(output.status.success(), "cmd output={output:?}.");
+        
+        let (base_img_width, base_img_height) = {
+            let base_img = image::load_image(absolute_input_path).unwrap();
+            (base_img.width(), base_img.height())
+        };
+        let expected_width = (target_height as f32 * base_img_width as f32 / base_img_height as f32).round() as u32;
+
+        let loaded_image = image::load_image(absolute_output_path);
+        assert!(loaded_image.is_ok());
+        let loaded_image = loaded_image.unwrap();
+        assert_eq!(expected_width, loaded_image.width());
+        assert_eq!(target_height, loaded_image.height());
+    }
+    
+    
+    #[test]
+    fn test_dither_resize_multiple_widths() {
+        // cargo test --test integration_tests test_dither_resize_multiple_widths -- --nocapture
+        tests_setup();
+        let target_width_range = (1..20).map(|idx| idx * 11);
+        let absolute_input_path = get_test_image_absolute_path(COLOR_GRASS300_IMAGE_FILENAME);
+        
+            
+        let (base_img_width, base_img_height) = {
+            let base_img = image::load_image(&absolute_input_path).unwrap();
+            (base_img.width(), base_img.height())
+        };
+
+        target_width_range.for_each(|target_width| {
+            let test_output_image_filename = format!("resize_multiwidth_{target_width}px_dithered_grass_image.png");
+            let absolute_output_path = get_test_save_absolute_path(test_output_image_filename);
+    
+            // Generate black and white colors palette
+            let mut cmd: Command = Command::cargo_bin("ditherum").unwrap();
+            cmd
+                .arg("dither")
+                .arg("-i")
+                .arg(&absolute_input_path)
+                .arg("-W")
+                .arg(target_width.to_string())
+                .arg("-o")
+                .arg(&absolute_output_path);
+            let output = cmd.output();
+            assert!(output.is_ok());
+    
+            let output = output.unwrap();
+            assert!(output.status.success(), "cmd output={output:?}.");
+            let expected_height = (target_width as f32 * base_img_height as f32 / base_img_width as f32).round() as u32;
+    
+            let loaded_image = image::load_image(absolute_output_path);
+            assert!(loaded_image.is_ok());
+            let loaded_image = loaded_image.unwrap();
+            assert_eq!(target_width, loaded_image.width());
+            assert_eq!(expected_height, loaded_image.height());
+        });
+    }
+    
+
 }

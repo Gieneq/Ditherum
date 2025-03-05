@@ -94,6 +94,14 @@ struct DitherModeArgs {
     #[arg(short = 'i', long = "input", value_name = "INPUT_PATH", required = true)]
     input_path: PathBuf,
 
+    /// Desired output image width
+    #[arg(short = 'W', long = "width", value_name = "DESIRED_WIDTH")]
+    width: Option<u32>,
+
+    /// Desired output image height
+    #[arg(short = 'H', long = "height", value_name = "DESIRED_HEIGHT")]
+    height: Option<u32>,
+
     /// Output file path (optional)
     #[arg(short = 'o', long = "output", value_name = "OUTPUT_PATH")]
     output_path: Option<PathBuf>,
@@ -175,6 +183,15 @@ fn run_dither(verbose: bool, args: DitherModeArgs) -> anyhow::Result<()> {
     vprintln!(verbose, "Opening image {:?}...", args.input_path);
     let image = ditherum::image::load_image(&args.input_path)?;
     vprintln!(verbose, "Got image width={}, height={}.", image.width(), image.height());
+
+    let image = if args.width.is_some() || args.height.is_some() {
+        vprintln!(verbose, "Attempt to reshape image to {:?}x{:?}...", args.width, args.height);
+        let reshaped_image = ditherum::image::manip::rgb_image_reshape(image, args.width, args.height);
+        vprintln!(verbose, "Got image width={}, height={}.", reshaped_image.width(), reshaped_image.height());
+        reshaped_image
+    } else {
+        image
+    };
 
     // Fork for 2 options:
     // - palette from input

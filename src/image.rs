@@ -84,6 +84,7 @@ impl ImageProcessor {
 }
 
 pub mod manip {
+    use image::DynamicImage;
     use palette::white_point::D65;
 
     use crate::color;
@@ -133,6 +134,30 @@ pub mod manip {
             let srgb_color = &rgb_vec[y as usize][x as usize];
             palette.find_closest_by_srgb(srgb_color).into()
         })
+    }
+
+    pub fn rgb_image_reshape(src_img: RgbImage, width: Option<u32>, height: Option<u32>) -> RgbImage {
+        let dyn_img = DynamicImage::from(src_img);
+
+        let (original_width, original_height) = (dyn_img.width(), dyn_img.height());
+        let (new_width, new_height) = match (width, height) {
+            (Some(w), Some(h)) => (w, h),
+            (None, None) => (original_width, original_height),
+            (None, Some(h)) => {
+                let w = (h as f32 * original_width as f32 / original_height as f32).round() as u32;
+                (w, h)
+            },
+            (Some(w), None) => {
+                let h = (w as f32 * original_height as f32 / original_width as f32).round() as u32;
+                (w, h)
+            },
+        };
+
+        dyn_img.resize_to_fill(
+            new_width, 
+            new_height, 
+            image::imageops::FilterType::Lanczos3
+        ).into()
     }
 }
 
