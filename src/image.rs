@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use image::{ImageResult, RgbImage};
 
@@ -85,6 +85,15 @@ pub fn generate_test_gradient_image(
     }
 
     img
+}
+
+pub fn count_image_colors(src_img: &image::RgbImage) -> HashMap<image::Rgb<u8>, usize> {
+    src_img.enumerate_pixels()
+        .map(|(_, _, px)| px)
+        .fold(HashMap::new(), |mut acc, px| {
+            acc.entry(*px).and_modify(|count| *count += 1).or_insert(1);
+            acc
+        })
 }
 
 impl ImageProcessor {

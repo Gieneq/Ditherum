@@ -16,13 +16,12 @@ use common::{
     SAVE_TEST_IMAGE_DIR
 };
 use ditherum::{
-    image::{
+    color::ColorRGB, image::{
         self, 
         generate_test_gradient_image, 
         ImageProcessor,
         ProcessingAlgorithm
-    }, 
-    palette::{
+    }, palette::{
         errors::PaletteError, 
         PaletteRGB
     }
@@ -251,6 +250,45 @@ fn test_full_processing_with_auto_palette_grass_image() {
         let result = image::save_image(&save_path, &processing_result_rgb);
         assert!(result.is_ok(), "Failed saving to {save_path:?}");
     }
+}
+
+#[test]
+fn test_subset_primary_bw_palette_using_grass_image() {
+    tests_setup();
+    let expected_colors_count = 3;
+    let test_image = load_test_image(COLOR_GRASS300_IMAGE_FILENAME);
+    let full_palette = PaletteRGB::primary_bw();
+
+    let subset_palette = full_palette.try_find_closest_subset_with_image(expected_colors_count, &test_image, true);
+    assert!(subset_palette.is_ok());
+    let subset_palette = subset_palette.unwrap();
+    println!("Found colors: {:?}", subset_palette);
+
+    assert_eq!(subset_palette.len(), expected_colors_count);
+}
+
+#[test]
+fn test_subset_custom_palette_using_grass_image() {
+    tests_setup();
+    let expected_colors_count = 5;
+    let test_image = load_test_image(COLOR_GRASS300_IMAGE_FILENAME);
+    let full_palette = PaletteRGB::from(vec![
+        ColorRGB([0,0,0]),
+        ColorRGB([255,0,0]),
+        ColorRGB([0,255,0]),
+        ColorRGB([255,255,0]),
+        ColorRGB([11,11,11]),
+        ColorRGB([33,33,33]),
+        ColorRGB([44,44,44]),
+        ColorRGB([0,0,99]),
+    ]);
+
+    let subset_palette = full_palette.try_find_closest_subset_with_image(expected_colors_count, &test_image, true);
+    assert!(subset_palette.is_ok());
+    let subset_palette = subset_palette.unwrap();
+    println!("Found colors: {:?}", subset_palette);
+
+    assert_eq!(subset_palette.len(), expected_colors_count);
 }
 
 #[cfg(test)]

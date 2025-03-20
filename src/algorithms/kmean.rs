@@ -82,7 +82,7 @@ where
     let closest_centroid = distances_to_centroids
         .min_by(|(_, a_dist), (_, b_dist)| {
             a_dist.partial_cmp(b_dist).unwrap_or_else(|| {
-                panic!("Distance comparison failed at item={item:?}, a_dist={a_dist:?}, b_dist={b_dist:?}");
+                panic!("Distance comparison failed at item={item:?}, a_dist={a_dist:?}, b_dist={b_dist:?}, centroids={centroids:?}");
             })
         });
     
@@ -380,6 +380,7 @@ where
         .collect::<Vec<_>>();
     let mut clusters;
     let mut iterations_count = 0;
+    // println!("Initial centroids={centroids:?}");
 
     loop {
         iterations_count += 1;
