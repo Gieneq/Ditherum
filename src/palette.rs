@@ -25,8 +25,7 @@ use crate::{
     color::{
         self, 
         ColorRGB
-    }, 
-    image::count_image_colors
+    }
 };
 
 pub mod errors {
@@ -34,11 +33,8 @@ pub mod errors {
 
     #[derive(Debug, thiserror::Error)]
     pub enum PaletteError {
-        #[error("Not enough colors to be converted to. Expected={expected} but actual={actual}.")]
-        NotEnoughColors {
-            expected: usize,
-            actual: usize
-        },
+        #[error("Not enough colors to be converted to: {0}.")]
+        NotEnoughColors(usize),
 
         #[error("Faild to convert, reason={0}")]
         ConvertionErrot(CentroidsFindError),
@@ -48,12 +44,6 @@ pub mod errors {
 
         #[error("JSON parsing failed, reason={0}")]
         JsonParsingFailed(serde_json::error::Error),
-
-        #[error("RequestedTooManyColors, requested={requested}, possible={possible}")]
-        RequestedTooManyColors {
-            requested: usize, 
-            possible: usize
-        },
 
         #[error("PaletteEmpty")]
         PaletteEmpty,
@@ -194,10 +184,7 @@ impl PaletteRGB {
         match self.len().cmp(&target_colors_count) {
 
             // Cannot obtain bigger pallete than the input pallet size
-            std::cmp::Ordering::Less => Err(self::errors::PaletteError::NotEnoughColors { 
-                expected: target_colors_count, 
-                actual: self.len() 
-            }),
+            std::cmp::Ordering::Less => Err(self::errors::PaletteError::NotEnoughColors(self.len())),
 
             // Te same pallet
             std::cmp::Ordering::Equal => Ok(self),
@@ -219,91 +206,63 @@ impl PaletteRGB {
         }
     }
 
-    /// If palette is provided it is better to try finding subset to 
-    /// match as closest to provided palette. The is fast approach
-    /// using only hashmap, and second using k-mena. It is hard
-    /// to say which one is better.
+    /// Attempts to find a subset of the current palette that best matches the image content.
     /// 
-    /// todo doc
-    pub fn try_find_closest_subset_with_image(
+    /// This is useful when the palette contains more colors than needed, and you'd like to reduce
+    /// it to a representative subset (e.g., for color quantization or palette-based compression).
+    /// 
+    /// It works by mapping each pixel in the provided image to the closest color from the current
+    /// palette, counting how frequently each palette color appears, and selecting the `max_colors_count`
+    /// most common colors.
+    /// 
+    /// # Arguments
+    /// - `max_colors_count`: Maximum number of colors to keep in the resulting palette.
+    /// - `raw_image`: An RGB image to extract color usage from.
+    /// 
+    /// # Returns
+    /// - `Ok(PaletteRGB)`: A new palette containing the most frequently used colors from the original palette.
+    /// - `Err(PaletteError::NotEnoughColors)`: If the palette contains fewer colors than requested.
+    /// 
+    /// ```
+    pub fn try_find_closest_subset_using_image(
         self, 
-        required_colors_count: usize, 
-        raw_image: &image::RgbImage, 
-        fast_algorithm: bool
+        max_colors_count: usize, 
+        raw_image: &image::RgbImage
     ) -> Result<Self, self::errors::PaletteError> {
-        // Cannot obtain bigger pallete than the input pallet size
-        if self.len() < required_colors_count {
-                return Err(self::errors::PaletteError::NotEnoughColors { 
-                expected: required_colors_count, 
-                actual: self.len() 
-            });
+        // Cannot obtain a larger palette than the one we have
+        if self.len() < max_colors_count {
+                return Err(self::errors::PaletteError::NotEnoughColors(self.len()));
         }
 
-        // Check if user requests more colors than image actually has.
-        // It has no sense. If it happen user can decide to request
-        // count returned in error.
-        let image_colors = count_image_colors(raw_image);
-        let image_colors_count = image_colors.len();
-        if required_colors_count > image_colors_count {
-            return Err(self::errors::PaletteError::RequestedTooManyColors {requested: required_colors_count, possible: image_colors_count});
-        }
-
-        // Map colors to closest colors from palette and convert to lab
-        let mapped_to_palette_colors = raw_image.enumerate_pixels()
-            .map(|(_, _, px)| {
+    // Map each pixel in the image to the closest color in the current palette
+        let mapped_to_palette_colors = raw_image
+            .pixels()
+            .map(|px| {
                 let px_color = ColorRGB::from_rgbu8(*px);
                 self.find_closest_by_rgb(&px_color)
             })
             .collect::<Vec<_>>();
 
-        let found_colors: HashMap<ColorRGB, usize> = mapped_to_palette_colors.iter()
+        // Count the frequency of each palette color
+        let mapped_colors_counts: HashMap<ColorRGB, usize> = mapped_to_palette_colors.iter()
             .fold(HashMap::new(), |mut acc, c| {
                 acc.entry(*c).and_modify(|cnt| *cnt += 1).or_insert(1);
                 acc
             });
-        let mut found_colors = found_colors.into_iter().collect::<Vec<_>>();
-        // println!("Found colors by hashmap: {found_colors:?}");
+        let mut found_colors = mapped_colors_counts.into_iter().collect::<Vec<_>>();
+
+        // Find expected colors count
+        let expected_colors_count = max_colors_count.min(found_colors.len());
+
+        // Find most common colors
         found_colors.sort_by_key(|(_, cnt)| -(*cnt as isize));
-        let most_common_colors = &found_colors[..required_colors_count];
-        // println!("Found most common colors by hashmap: {:?}", most_common_colors);
-        if fast_algorithm {
-            let tmp_colors_vec = most_common_colors.iter()
-                .map(|(c, _)| *c)
-                .collect::<Vec<_>>();
-            return Ok(Self::from(tmp_colors_vec));
-        }
+        let most_common_colors = &found_colors[..expected_colors_count];
+        
+        let tmp_colors_vec = most_common_colors.iter()
+            .map(|(c, _)| *c)
+            .collect::<Vec<_>>();
 
-        // Apply clusterization to find best fitting centroids
-        let new_colors: Vec<ColorRGB> = find_colors_centroids(
-            &mapped_to_palette_colors, 
-            required_colors_count
-        )?;
-        // println!("new_colors={new_colors:?}");
-
-        // Convert lab colors matching closest colors from palette
-        let mut tmp_palette = self;
-
-        let mut result_colors = vec![];
-
-        new_colors.iter().try_for_each(|color| {
-            if tmp_palette.is_empty() {
-                return Err(PaletteError::PaletteEmpty);
-            }
-
-            let closest_color = tmp_palette.find_closest_by_rgb(color);
-
-            let closest_color_index = tmp_palette.iter()
-                .position(|c| c == &closest_color)
-                .expect("Just found by 'find_closest_by_rgb' color has gone from vector, 'iter.position' failed");
-
-            result_colors.push(closest_color);
-            tmp_palette.remove(closest_color_index);
-
-            Ok(())
-        })?;
-        println!("Found colors by k-mean: {result_colors:?}");
-
-        Ok(Self(result_colors))
+        Ok(Self::from(tmp_colors_vec))
     }
 
     /// Saves the palette to a JSON file at the specified path.
@@ -600,40 +559,6 @@ fn find_lab_colors_centroids(
     )
 }
 
-fn find_colors_centroids(
-    input: &[ColorRGB], 
-    centroids_count: usize
-) -> Result<Vec<ColorRGB>, kmean::CentroidsFindError> {
-    let distance_measure = |a: &ColorRGB, b: &ColorRGB| {
-        a.iter().zip(b.iter())
-            .map(|(a,b)| (a.abs_diff(*b) as u32).pow(2))
-            .sum::<u32>() as f32
-    };
-
-    let calculate_mean = |arr: &[ColorRGB]| {
-        let accumulator: [u64; 3] = arr.iter()
-            .fold([0; 3], |mut acc, item| {
-                acc[0] += item[0] as u64;
-                acc[1] += item[1] as u64;
-                acc[2] += item[2] as u64;
-                acc
-            });
-            
-        ColorRGB([
-            (accumulator[0] as f64 / arr.len() as f64).round().clamp(0.0, 255.0) as u8,
-            (accumulator[1] as f64 / arr.len() as f64).round().clamp(0.0, 255.0) as u8,
-            (accumulator[2] as f64 / arr.len() as f64).round().clamp(0.0, 255.0) as u8
-        ])
-    };
-
-    kmean::find_centroids(
-        input, 
-        centroids_count, 
-        distance_measure, 
-        calculate_mean
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -658,8 +583,7 @@ mod tests {
         let result = palette.clone().try_reduce(4);
         assert!(result.is_err());
 
-        if let Err(errors::PaletteError::NotEnoughColors { expected, actual }) = result {
-            assert_eq!(expected, 4);
+        if let Err(errors::PaletteError::NotEnoughColors(actual)) = result {
             assert_eq!(actual, palette.len());
         } else {
             panic!("Expected NotEnoughColors error.");

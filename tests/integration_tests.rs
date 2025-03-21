@@ -259,12 +259,12 @@ fn test_subset_primary_bw_palette_using_grass_image() {
     let test_image = load_test_image(COLOR_GRASS300_IMAGE_FILENAME);
     let full_palette = PaletteRGB::primary_bw();
 
-    let subset_palette = full_palette.try_find_closest_subset_with_image(expected_colors_count, &test_image, true);
+    let subset_palette = full_palette.try_find_closest_subset_using_image(expected_colors_count, &test_image);
     assert!(subset_palette.is_ok());
     let subset_palette = subset_palette.unwrap();
     println!("Found colors: {:?}", subset_palette);
 
-    assert_eq!(subset_palette.len(), expected_colors_count);
+    assert!(subset_palette.len() <= expected_colors_count);
 }
 
 #[test]
@@ -283,12 +283,12 @@ fn test_subset_custom_palette_using_grass_image() {
         ColorRGB([0,0,99]),
     ]);
 
-    let subset_palette = full_palette.try_find_closest_subset_with_image(expected_colors_count, &test_image, true);
+    let subset_palette = full_palette.try_find_closest_subset_using_image(expected_colors_count, &test_image);
     assert!(subset_palette.is_ok());
     let subset_palette = subset_palette.unwrap();
     println!("Found colors: {:?}", subset_palette);
 
-    assert_eq!(subset_palette.len(), expected_colors_count);
+    assert!(subset_palette.len() <= expected_colors_count);
 }
 
 #[cfg(test)]
@@ -407,10 +407,7 @@ mod tests_cli {
             .filter_map(|v| char::from_u32(*v as u32))
             .collect::<String>();
 
-        let expectd_err_text = PaletteError::NotEnoughColors { 
-            expected: output_colors_count, 
-            actual: actual_colors_count 
-        }
+        let expectd_err_text = PaletteError::NotEnoughColors(actual_colors_count)
         .to_string();
         assert!(stderr_text.trim().ends_with(&expectd_err_text), "Some other error message: '{stderr_text}'");
     }
