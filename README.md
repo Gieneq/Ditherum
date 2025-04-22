@@ -1,5 +1,7 @@
 # Ditherum
 
+Info: project moved to Rust workspace [here](https://github.com/Gieneq/DiamondsImager)
+
 Ditherum is a Rust library and command-line interface (CLI) tool designed for image dithering and color palette manipulation. It currently supports extracting color palettes from images using multithreaded variant of the [K-means clustering](https://en.wikipedia.org/wiki/K-means_clustering) algorithm, resizing and dithering images using the [Floyd-Steinberg algorithm](https://en.wikipedia.org/wiki/Floyd%E2%80%93Steinberg_dithering).
 
 <p align="center">
